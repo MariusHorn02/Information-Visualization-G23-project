@@ -1,6 +1,3 @@
-// theme.js — reads the colour tokens from css/style.css :root into d3 scales.
-// Colours are defined once, in CSS, so all idioms share one palette.
-
 const rootStyle = () => getComputedStyle(document.documentElement);
 
 export function cssVar(name) {
@@ -10,11 +7,6 @@ export function cssVar(name) {
 export const transitionMs = () => +cssVar("--transition-ms") || 750;
 export const dotRadius = () => +cssVar("--dot-radius") || 3.5;
 
-/**
- * Colour encodings shared by all charts. Categorical/ordinal: one CSS colour
- * per value (hue for categories, lightness order for ordered values).
- * Sequential: a continuous ramp through the CSS colour stops.
- */
 export const COLOR_ENCODINGS = {
   season: {
     label: "Season",
@@ -66,8 +58,7 @@ export const COLOR_ENCODINGS = {
     unit: "vehicles/day",
     vars: ["--traffic-0", "--traffic-1", "--traffic-2", "--traffic-3", "--traffic-4"],
   },
-  // A few event days reach 35 min: the ramp ends at the 95th percentile so
-  // they don't wash out the rest; longer days get the darkest colour.
+
   bike_avg_duration_min: {
     label: "Trip duration",
     type: "sequential",
@@ -78,7 +69,6 @@ export const COLOR_ENCODINGS = {
   },
 };
 
-/** Horizon band colours, lightest → darkest. */
 export function horizonColors() {
   return {
     above: ["--hz-above-1", "--hz-above-2", "--hz-above-3"].map(cssVar),
@@ -87,7 +77,6 @@ export function horizonColors() {
   };
 }
 
-/** d3 colour scale for an encoding; sequential domains come from the data (`values`). */
 export function colorScale(key, values = []) {
   const enc = COLOR_ENCODINGS[key];
   const colors = enc.vars.map(cssVar);

@@ -1,7 +1,3 @@
-// expand.js — lets any panel fill the browser window (button or double-click
-// on its header; Esc or a click outside closes it). Charts need no extra code:
-// the resize observer in main.js redraws them at the new size.
-
 const ICONS = `
   <svg class="icon-expand" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
     <path d="M10 2h4v4M6 14H2v-4M14 2 9.5 6.5M2 14l4.5-4.5"/>

@@ -1,6 +1,3 @@
-// tooltip.js — one tooltip element shared by every chart, so all idioms show
-// details in the same style. Charts pass HTML and the pointer event.
-
 import { ATTRIBUTES, formatValue } from "./data.js";
 
 const OFFSET = 14;
@@ -34,10 +31,9 @@ export function hide() {
   if (el) el.classed("is-visible", false);
 }
 
-/**
- * Standard tooltip for one day row, used by every chart that shows days.
- * `highlight` = attribute keys the calling chart encodes (shown in bold).
- */
+
+ // Standard tooltip for one day row, used by every chart that shows days.
+
 export function dayHtml(d, highlight = []) {
   const bold = new Set(highlight);
   const rows = Object.keys(ATTRIBUTES).map((k) =>

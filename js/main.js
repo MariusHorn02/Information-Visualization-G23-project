@@ -1,9 +1,3 @@
-// main.js — entry point: loads the data once, then mounts every chart in CHARTS.
-//
-// Every chart module has the same interface:
-//   create(container, data, dispatcher) → { update(state, reason), resize() }
-// Adding an idiom = one new file in js/charts/ + one line in CHARTS.
-
 import * as Data from "./data.js";
 import { state, dispatcher, register, isActive, hasFilter } from "./state.js";
 import { makeExpandable } from "./expand.js";
@@ -30,8 +24,6 @@ async function init() {
   wireGlobalUi(rows);
 }
 
-// Redraw a chart when its drawing area changes size: window resize, full
-// screen, or its own legend wrapping onto a second line.
 function observeSize(container, chart) {
   const targets = [container, ...container.querySelectorAll(".chart-area")];
   let frame = null;
@@ -49,7 +41,6 @@ function observeSize(container, chart) {
 function wireGlobalUi(rows) {
   d3.select("#reset-btn").on("click", () => dispatcher.call("reset"));
 
-  // The header status listens to "change" like any chart.
   const status = d3.select("#selection-status");
   const fmt = d3.utcFormat("%-d %b %Y");
   dispatcher.on("change.status", (s, reason) => {

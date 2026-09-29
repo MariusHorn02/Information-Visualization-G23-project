@@ -1,15 +1,3 @@
-// charts/scatter.js — scatterplot: one point per day.
-//
-// X and Y = two quantitative attributes on position (the most accurate channel
-// for correlation); colour = a categorical attribute on hue. All three are
-// switchable, so one view serves several tasks. The dot pattern shows the
-// correlation; the legend adds Pearson r per colour group (e.g. per season),
-// computed on the days in the chosen period. Avoid occlusion: small
-// transparent dots, dry days jittered.
-//
-// Interactions → events: dropdowns → "encode" (animated) · hover → "hover" ·
-// click a point or 2D brush → "brushPoints" · legend click → "brushPoints".
-
 import { ATTRIBUTES, attrLabel, correlation } from "../data.js";
 import { COLOR_ENCODINGS, colorScale, transitionMs, dotRadius } from "../theme.js";
 import { isActive, hasFilter, inPeriod } from "../state.js";
@@ -18,14 +6,19 @@ import * as tooltip from "../tooltip.js";
 
 const NAME = "scatter";
 const MARGIN = { top: 10, right: 18, bottom: 42, left: 70 };
-const HOVER_RADIUS = 14; // px: max pointer distance to count as hovering/clicking a point
-const JITTER = 5;        // px: max sideways offset for zero values (dry days)
+const HOVER_RADIUS = 14;
+const JITTER = 5;        
 const CHANNELS = ["x", "y", "color"];
+
+// Only the options the tasks need; the calendar keeps its own colour modes.
+const X_OPTIONS = ["rain_mm", "temp_c", "traffic_count"];
+const Y_OPTIONS = ["bike_trips", "traffic_count", "no2_ug_m3", "bike_avg_duration_min"];
+const COLOR_OPTIONS = ["season", "day_type", "rain_category", "year"];
 
 const finite = Number.isFinite;
 const fmtR = d3.format("+.2f");
 
-/** Stable pseudo-random value in [−1, 1] per day id: jitter never moves between redraws. */
+
 function jitterOf(id) {
   let h = 2166136261;
   for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619);
@@ -37,10 +30,17 @@ export function create(container, data, dispatcher) {
 
   const controls = root.append("div").attr("class", "controls");
   const selects = {
-    x: addSelect("x", "X", Object.keys(ATTRIBUTES), attrLabel),
-    y: addSelect("y", "Y", Object.keys(ATTRIBUTES), attrLabel),
-    color: addSelect("color", "Color", Object.keys(COLOR_ENCODINGS), (k) => COLOR_ENCODINGS[k].label),
+    x: addSelect("x", "X", X_OPTIONS, attrLabel),
+    y: addSelect("y", "Y", Y_OPTIONS, attrLabel),
+    color: addSelect("color", "Color", COLOR_OPTIONS, (k) => COLOR_ENCODINGS[k].label),
   };
+
+  /** Show the current encoding, and never allow X = Y. */
+  function syncControls(wanted) {
+    for (const c of CHANNELS) selects[c].property("value", wanted[c]);
+    selects.x.selectAll("option").property("disabled", (k) => k === wanted.y);
+    selects.y.selectAll("option").property("disabled", (k) => k === wanted.x);
+  }
 
   const area = root.append("div").attr("class", "chart-area");
   const svg = area.append("svg").attr("role", "img");
@@ -53,8 +53,7 @@ export function create(container, data, dispatcher) {
   const labelY = g.append("text").attr("class", "axis-label").attr("text-anchor", "middle")
     .attr("transform", "rotate(-90)");
   const dotsG = g.append("g").attr("class", "dots");
-  // The brush lies on top so a drag can start anywhere; hover and click use a
-  // Delaunay nearest-point search instead of per-circle events.
+
   const brushG = g.append("g").attr("class", "brush");
 
   const note = root.append("div").attr("class", "chart-note");
@@ -62,10 +61,10 @@ export function create(container, data, dispatcher) {
 
   let width = 0;
   let height = 0;
-  let enc = null;          // encoding currently drawn
-  let points = [];         // days with both an x and a y value
+  let enc = null;         
+  let points = [];    
   let x, y, color, delaunay;
-  let periodKey = null;    // period the legend (counts, r) was computed for
+  let periodKey = null;  
   let last = null;
   const legendSel = legendSelector(dispatcher, `${NAME}:legend`, () => data,
     () => COLOR_ENCODINGS[enc.color].field);
@@ -91,7 +90,6 @@ export function create(container, data, dispatcher) {
       .call((s) => s.selectAll("option").data(keys).join("option").attr("value", (d) => d).text(format));
   }
 
-  // A jittered axis starts JITTER px in, so dry days don't spill over the axis.
   function makeScale(key, [r0, r1]) {
     const pad = ATTRIBUTES[key].jitterZero ? JITTER + 1 : 0;
     const dir = r1 > r0 ? 1 : -1;
@@ -101,7 +99,6 @@ export function create(container, data, dispatcher) {
       .nice();
   }
 
-  /** Full redraw; animated on re-encoding. */
   function render(state, animate) {
     enc = { ...state.encodings.scatter };
     points = data.filter((d) => finite(d[enc.x]) && finite(d[enc.y]));
@@ -127,7 +124,6 @@ export function create(container, data, dispatcher) {
     labelX.attr("x", width / 2).attr("y", height + 36).text(attrLabel(enc.x));
     labelY.attr("x", -height / 2).attr("y", -56).text(attrLabel(enc.y));
 
-    // Keyed by day id, so a re-encoding moves each day to its new place.
     const r = dotRadius();
     const fill = (d) => color(d[COLOR_ENCODINGS[enc.color].field]);
     const stroke = (d) => d3.color(fill(d))?.darker(0.8) ?? null;
@@ -149,7 +145,6 @@ export function create(container, data, dispatcher) {
 
     brush.extent([[0, 0], [width, height]]);
     brushG.call(brush);
-    // The old brush rectangle belongs to the old axes; the selection itself stays in state.
     brushG.call(brush.move, null);
 
     const hidden = data.length - points.length;
@@ -159,8 +154,6 @@ export function create(container, data, dispatcher) {
     renderCorrelationLegend(state);
   }
 
-  // Legend: day counts and correlation r per colour group, for the days in
-  // the chosen period (one overall r for a continuous colour).
   function renderCorrelationLegend(state) {
     const ce = COLOR_ENCODINGS[enc.color];
     const inScope = points.filter((d) => inPeriod(state, d));
@@ -186,12 +179,10 @@ export function create(container, data, dispatcher) {
 
   const key = (s) => `${s.zoom?.map(Number)}|${s.timeRange?.map(Number)}`;
 
-  /** Selection and hover styling only; no layout change. */
   function applySelection(state) {
     const filtered = hasFilter(state);
     const dots = dotsG.selectAll("circle");
     dots.classed("is-dimmed", (d) => filtered && !isActive(state, d));
-    // Selected days drawn above the grey ones.
     if (filtered) dots.filter((d) => isActive(state, d)).raise();
     if (key(state) !== periodKey) renderCorrelationLegend(state);
     applyHover(state);
@@ -208,7 +199,6 @@ export function create(container, data, dispatcher) {
     }
   }
 
-  /** The point under the pointer (within HOVER_RADIUS), or null. */
   function pointAt(event) {
     if (!points.length) return null;
     const [mx, my] = d3.pointer(event, g.node());
@@ -217,10 +207,9 @@ export function create(container, data, dispatcher) {
   }
 
   function brushed(event) {
-    if (!event.sourceEvent) return; // ignore programmatic brush.move calls
+    if (!event.sourceEvent) return; 
     if (!event.selection) {
       if (event.type !== "end") return;
-      // Click without drag: select that day (again = clear), or clear on empty space.
       const d = pointAt(event.sourceEvent);
       const onlyThis = d && last?.selectionSource === NAME && last.selectedIds?.size === 1 && last.selectedIds.has(d.id);
       if (d && !onlyThis) dispatcher.call("brushPoints", null, { ids: [d.id], source: NAME });
@@ -236,7 +225,7 @@ export function create(container, data, dispatcher) {
 
   brushG
     .on("pointermove.hover", (event) => {
-      if (event.buttons) return; // while brushing
+      if (event.buttons) return;
       const d = pointAt(event);
       brushG.select(".overlay").style("cursor", d ? "pointer" : null);
       if (d) {
@@ -267,11 +256,10 @@ export function create(container, data, dispatcher) {
       const wanted = state.encodings.scatter;
       const encodingChanged = !enc || CHANNELS.some((c) => enc[c] !== wanted[c]);
       if (encodingChanged) {
-        for (const c of ["x", "y", "color"]) selects[c].property("value", wanted[c]);
+        syncControls(wanted);
         if (!enc) measure();
-        render(state, Boolean(enc)); // no animation on the first draw
+        render(state, Boolean(enc)); 
       } else if (state.selectionSource !== NAME) {
-        // Selection came from elsewhere: our brush rectangle no longer describes it.
         brushG.call(brush.move, null);
       }
       applySelection(state);

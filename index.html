@@ -4,12 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Rain & Mobility in Bergen</title>
-  <link rel="icon" href="data:,"> <!-- no favicon: avoids a 404 in the console -->
+  <link rel="icon" href="data:,"> 
   <link rel="stylesheet" href="css/style.css">
-  <!-- Local copy of D3 v7: the prototype must work offline. Loaded as a classic
-       script so the global `d3` is available to every ES module below. -->
   <script src="lib/d3.min.js"></script>
-  <!-- Plain ES modules (no bundler). Requires a local server, e.g. `python3 -m http.server`. -->
   <script type="module" src="js/main.js"></script>
 </head>
 <body>
@@ -20,9 +17,6 @@
     <button class="btn" id="reset-btn" type="button">Reset</button>
   </header>
 
-  <!-- Each panel's .panel__body has a data-chart id; js/main.js mounts the
-       chart module with that id into it and adds the expand button to the
-       panel header. Layout lives in css/style.css. -->
   <main class="dashboard">
     <section class="panel panel--horizon" aria-labelledby="h-horizon">
       <div class="panel__head">

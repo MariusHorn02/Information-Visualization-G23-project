@@ -1,14 +1,3 @@
-// charts/horizon.js — horizon chart: four strips of deviation from average.
-//
-// Time on x. Each strip folds its deviation into 3 bands of height `step`,
-// darker for larger deviations; negative values are mirrored upward. Hue shows
-// the sign (orange above / blue below — no red), lightness and height the size.
-// Four series fit in little height, with no shared axis across units.
-//
-// Interactions → events: year buttons / year labels / "Zoom to period" →
-// "zoomTime" · 1D brush → "brushTime" · hover → "hover". From the state it
-// draws a rule at the hovered day and a rug of days selected in other views.
-
 import { formatValue, SMOOTH_WINDOW } from "../data.js";
 import { horizonColors } from "../theme.js";
 import * as tooltip from "../tooltip.js";
@@ -23,7 +12,6 @@ const DAY = 864e5;
 const fmtDay = d3.utcFormat("%-d %b %Y");
 const fmtShort = d3.utcFormat("%-d %b");
 
-/** Deviation text: "+23 %" for relative strips, "+3.2 °C" for temperature. */
 const fmtDev = (s, v) => (!Number.isFinite(v) ? "–"
   : s.relative ? d3.format("+.0%")(v) : `${d3.format("+.1f")(v)} °C`);
 const fmtStep = (s) => (s.relative ? d3.format(".0%")(s.step) : `${s.step} °C`);
@@ -31,13 +19,12 @@ const fmtStep = (s) => (s.relative ? d3.format(".0%")(s.step) : `${s.step} °C`)
 export function create(container, series, dispatcher) {
   const root = d3.select(container);
 
-  const allDays = series[0].values; // every series has the same days
+  const allDays = series[0].values;
   const dateById = new Map(allDays.map((d) => [d.id, d.date]));
   const fullRange = d3.extent(allDays, (d) => d.date);
   const years = d3.range(fullRange[0].getUTCFullYear(), fullRange[1].getUTCFullYear() + 1);
   const bisect = d3.bisector((d) => d.date);
 
-  /** A calendar year, clipped to the dataset's range. */
   const yearRange = (y) => [
     new Date(Math.max(+fullRange[0], Date.UTC(y, 0, 1))),
     new Date(Math.min(+fullRange[1], Date.UTC(y, 11, 31))),
@@ -56,7 +43,6 @@ export function create(container, series, dispatcher) {
     .attr("class", "toggle")
     .text((y) => y)
     .on("click", (event, y) => {
-      // The active year again = back to all years.
       const range = yearRange(y);
       zoomTo(sameRange(range, last?.zoom) ? null : range);
     });
@@ -65,7 +51,6 @@ export function create(container, series, dispatcher) {
     .text("Zoom to period")
     .on("click", () => {
       const [a, b] = last.timeRange;
-      // Minimum span, so a tiny brush still gives a readable zoom.
       const pad = Math.max(0, (MIN_ZOOM_DAYS * DAY - (b - a)) / 2);
       zoomTo([
         new Date(Math.max(+fullRange[0], +a - pad)),
@@ -82,13 +67,10 @@ export function create(container, series, dispatcher) {
   const svg = area.append("svg").attr("role", "img")
     .attr("aria-label", "Horizon chart of bike trips, temperature, car traffic and NO₂ relative to their average");
   const g = svg.append("g").attr("transform", `translate(${MARGIN.left},${MARGIN.top})`);
-  // Focus + context: bands are drawn twice, grey underneath and coloured on
-  // top, clipped to the marked period, so days outside it turn grey.
   const clipId = "hz-focus-clip";
   const focusRect = svg.append("defs").append("clipPath").attr("id", clipId)
     .append("rect").attr("y", -10);
   const rowsG = g.append("g").attr("class", "hz-rows");
-  // Rug: one tick per day selected in another view, showing WHEN those days happened.
   const rugG = g.append("g").attr("class", "hz-rug");
   const rugLabel = g.append("text").attr("class", "hz-rug__label").attr("text-anchor", "end")
     .attr("x", -12).attr("dy", "0.35em");
@@ -101,7 +83,7 @@ export function create(container, series, dispatcher) {
   let rowsH = 0;
   let rowH = 0;
   let x;
-  let visible = [];          // days in the current x domain
+  let visible = [];      
   let drawnZoom = undefined;
   let last = null;
 
@@ -112,7 +94,7 @@ export function create(container, series, dispatcher) {
       dispatcher.call("hover", null, null);
     })
     .on("brush end", (event) => {
-      if (!event.sourceEvent) return; // ignore our own brush.move calls
+      if (!event.sourceEvent) return;
       if (!event.selection) {
         if (event.type === "end") dispatcher.call("brushTime", null, null);
         return;
@@ -130,7 +112,6 @@ export function create(container, series, dispatcher) {
     rowH = (rowsH - ROW_GAP * (series.length - 1)) / series.length;
   }
 
-  /** Days inside [a, b] of a date-sorted array. */
   const slice = (values, [a, b]) => values.slice(bisect.left(values, a), bisect.right(values, b));
 
   function render(state) {
@@ -160,8 +141,6 @@ export function create(container, series, dispatcher) {
         row.select(".hz-sublabel").attr("x", -12).attr("y", rowH / 2 + 12)
           .text(`band = ${fmtStep(s)}`);
 
-        // Band i shows the part of |dev| between i·step and (i+1)·step,
-        // stretched to the full row height.
         const y = d3.scaleLinear().domain([0, step]).range([rowH, 0]);
         const layers = [];
         for (const [sign, palette] of [[1, colors.above], [-1, colors.below]]) {
@@ -199,7 +178,6 @@ export function create(container, series, dispatcher) {
   function renderAxis(state) {
     const axis = d3.axisBottom(x).tickSizeOuter(0);
     if (!state.zoom) {
-      // One tick per year, plus the first day so the partial year 2021 is labelled.
       const [start, end] = x.domain();
       const yearTicks = d3.utcYears(d3.utcYear.ceil(start), end);
       const ticks = yearTicks.length && x(yearTicks[0]) - x(start) < 36 ? yearTicks : [start, ...yearTicks];
@@ -217,7 +195,6 @@ export function create(container, series, dispatcher) {
       .data(state.zoom ? [] : [0]).join("title").text("Show only this year");
   }
 
-  // Legend as in the sketch: darkest orange on top, darkest blue at the bottom.
   function renderLegend(colors) {
     const swatches = [...colors.above.slice().reverse(), ...colors.below];
     const sw = 12;
@@ -267,14 +244,12 @@ export function create(container, series, dispatcher) {
       .text("Selected days")
       .append("title").text(`${ids.length} days selected in the scatterplot or calendar, shown on the timeline`);
 
-    // Clip to the marked period (from the first day's start to the last day's end).
     const [f0, f1] = state.timeRange
       ? [x(state.timeRange[0]), x(d3.utcDay.offset(state.timeRange[1], 1))]
       : [-1, width + 1];
     focusRect.attr("x", Math.max(-1, f0)).attr("width", Math.max(0, Math.min(width + 1, f1) - Math.max(-1, f0)))
       .attr("height", rowsH + 20);
 
-    // Keep the brush in sync with state.timeRange (Reset, zoom).
     const current = d3.brushSelection(brushG.node());
     if (!state.timeRange && current) brushG.call(brush.move, null);
     if (state.timeRange && !current) brushG.call(brush.move, state.timeRange.map(x));
@@ -304,7 +279,7 @@ export function create(container, series, dispatcher) {
 
   brushG
     .on("pointermove.hover", (event) => {
-      if (event.buttons || !visible.length) return; // while brushing
+      if (event.buttons || !visible.length) return; 
       const [mx] = d3.pointer(event, g.node());
       const i = Math.min(visible.length - 1, bisect.center(visible, x.invert(mx)));
       tooltip.show(tooltipHtml(i), event);
@@ -322,7 +297,6 @@ export function create(container, series, dispatcher) {
       if (reason === "hover") return applyHover(state);
       if (state.zoom !== drawnZoom) {
         render(state);
-        // Short fade so the new time scale reads as a zoom.
         rowsG.style("opacity", 0.2).transition().duration(250).style("opacity", 1);
       }
       applyState(state);

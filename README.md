@@ -136,7 +136,7 @@ All colours, fonts and spacing are CSS variables in `:root` (`css/style.css`). `
 | Missing values are hidden, with a note | 21 traffic days and 33 NO₂ days have no measurement. They are left out, never drawn as zero. |
 
 **Interactions:**
-- **Dropdowns** change X, Y and colour, with a 750 ms animated transition keyed by day.
+- **Dropdowns** for X, Y and colour offer only the attributes the tasks need (X: rain, temperature, traffic · Y: bike trips, traffic, NO₂, trip duration · colour: season, weekday/weekend, rain category, year), so every combination serves a task. X can never equal Y. Transitions are 750 ms and keyed by day.
 - **Hover** shows a day's values (details on demand).
 - **Click a point** to select that single day everywhere; click it again to clear.
 - **Brush** a rectangle to highlight those days in the other two views.

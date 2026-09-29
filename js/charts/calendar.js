@@ -1,15 +1,3 @@
-// charts/calendar.js — calendar heatmap: one square per day.
-//
-// Column = week of the year, row = weekday, one block per year. Keeping the
-// real calendar layout shows the yearly and the weekly cycle at once. Colour =
-// the measure chosen with the toggle; rain uses 4 ordinal steps, and the
-// legend counts the days per category.
-//
-// Interactions → events: toggle → "encode" · hover → "hover" · click or drag
-// days, weekday letter, legend category → "brushPoints" · year label →
-// "zoomTime". Days selected in any view are outlined; days outside the chosen
-// period fade out.
-
 import { COLOR_ENCODINGS, colorScale, cssVar } from "../theme.js";
 import { inPeriod } from "../state.js";
 import { renderLegend, markLegend, legendSelector } from "../legend.js";
@@ -23,10 +11,10 @@ const MEASURES = [
   { key: "traffic_count", label: "Traffic" },
   { key: "bike_avg_duration_min", label: "Trip duration" },
 ];
-const WEEKS = 54;            // a year spans at most 54 Monday-first week columns
-const YEAR_GAP = 1.4;        // gap between year blocks, in cells
-const LEFT = 58;             // room for year labels + weekday letters
-const TOP = 16;              // room for month labels
+const WEEKS = 54;            
+const YEAR_GAP = 1.4;       
+const LEFT = 58;             
+const TOP = 16;          
 
 const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
 const WEEKDAY_NAMES = ["Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays", "Sundays"];
@@ -37,7 +25,6 @@ export function create(container, years, dispatcher) {
   const rows = allDays.filter((d) => d.row).map((d) => d.row);
   const dataRange = d3.extent(rows, (d) => d.date);
 
-  /** A calendar year, clipped to the dataset's range. */
   const yearRange = (y) => [
     new Date(Math.max(+dataRange[0], Date.UTC(y, 0, 1))),
     new Date(Math.min(+dataRange[1], Date.UTC(y, 11, 31))),
@@ -64,7 +51,7 @@ export function create(container, years, dispatcher) {
   let color;
   let cell = 10;
   let last = null;
-  let periodKey = null;     // period the legend counts were computed for
+  let periodKey = null;     
   let weekdaySel = null;
   const legendSel = legendSelector(dispatcher, `${NAME}:legend`, () => rows,
     () => COLOR_ENCODINGS[measure].field);
@@ -85,7 +72,6 @@ export function create(container, years, dispatcher) {
     const pad = cell >= 6 ? 1 : 0.5;
     const nodata = cssVar("--color-nodata");
 
-    // Month initials when cells are small, as in the sketch.
     const monthFmt = d3.utcFormat("%b");
     const firstYear = years[0].year;
     monthsG.selectAll("text")
@@ -118,8 +104,6 @@ export function create(container, years, dispatcher) {
       .text((y) => y.year)
       .append("title").text("Show only this year (click again for all years)");
 
-    // Weekday letters select every such weekday; an invisible row-high hit
-    // area keeps them clickable when cells are small.
     const weekdays = blocks.select(".cal-weekdays").selectAll("g.cal-weekday")
       .data(cell >= 5 ? WEEKDAYS.map((letter, i) => ({ letter, i })) : [])
       .join((enter) => {
@@ -164,7 +148,6 @@ export function create(container, years, dispatcher) {
     renderCalendarLegend(state);
   }
 
-  // Legend day counts follow the chosen period (e.g. only 2023).
   function renderCalendarLegend(state) {
     const ce = COLOR_ENCODINGS[measure];
     const scope = state ? rows.filter((d) => inPeriod(state, d)) : rows;
@@ -190,7 +173,6 @@ export function create(container, years, dispatcher) {
   }
 
   function applySelection(state) {
-    // Period (brush / year): days outside fade out. Selection: days are outlined.
     yearsG.selectAll(".cal-cell")
       .classed("is-dimmed", (d) => d.row && !inPeriod(state, d.row))
       .classed("is-selected", (d) => Boolean(d.row && state.selectedIds?.has(d.id) && inPeriod(state, d.row)));
@@ -211,7 +193,7 @@ export function create(container, years, dispatcher) {
     }
   }
 
-  let anchor = null;   // day where a drag started
+  let anchor = null;  
   let dragged = false;
 
   const selectRange = (a, b) => {
@@ -226,7 +208,7 @@ export function create(container, years, dispatcher) {
     .on("pointerdown", (event) => {
       const d = cellDatum(event);
       if (!d?.row) return;
-      event.preventDefault(); // no text selection while dragging
+      event.preventDefault(); 
       anchor = d;
       dragged = false;
       tooltip.hide();
@@ -251,7 +233,6 @@ export function create(container, years, dispatcher) {
   d3.select(window).on(`pointerup.${NAME}`, () => {
     if (!anchor) return;
     if (!dragged) {
-      // Plain click: select that day, or clear if it is the only selected day.
       const only = last?.selectionSource === NAME && last.selectedIds?.size === 1 && last.selectedIds.has(anchor.id);
       dispatcher.call("brushPoints", null, { ids: only ? null : [anchor.id], source: NAME });
     }

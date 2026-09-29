@@ -1,9 +1,6 @@
-// legend.js — one legend renderer for all charts: clickable swatches (with day
-// counts) for categories, a gradient ramp with min / max for continuous colours.
-
 import { COLOR_ENCODINGS } from "./theme.js";
 
-// options: counts (Map value → days), showCounts, extra (value → text, e.g. r), onSelect(value)
+
 export function renderLegend(legend, key, scale, { counts, showCounts = false, extra, onSelect } = {}) {
   const ce = COLOR_ENCODINGS[key];
   legend.selectAll("*").remove();
@@ -16,7 +13,6 @@ export function renderLegend(legend, key, scale, { counts, showCounts = false, e
     legend.append("span").text(fmt(lo));
     legend.append("span").attr("class", "legend__ramp")
       .style("background", `linear-gradient(to right, ${stops.join(",")})`);
-    // A capped ramp's top colour means "this or more".
     legend.append("span").text(ce.clipQuantile ? `≥ ${fmt(hi)}` : fmt(hi));
     return;
   }
@@ -40,7 +36,6 @@ export function markLegend(legend, value) {
   legend.selectAll(".legend__item").classed("is-active", (v) => v === value);
 }
 
-/** Legend click = select all days of that category; clicking it again clears. */
 export function legendSelector(dispatcher, source, getRows, getField) {
   let value = null;
   return {
