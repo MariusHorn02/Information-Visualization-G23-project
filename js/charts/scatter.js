@@ -32,7 +32,7 @@ export function create(container, data, dispatcher) {
   const selects = {
     x: addSelect("x", "X", X_OPTIONS, attrLabel),
     y: addSelect("y", "Y", Y_OPTIONS, attrLabel),
-    color: addSelect("color", "Color", COLOR_OPTIONS, (k) => COLOR_ENCODINGS[k].label),
+    color: addSelect("color", "Category", COLOR_OPTIONS, (k) => COLOR_ENCODINGS[k].label),
   };
 
   /** Show the current encoding, and never allow X = Y. */
