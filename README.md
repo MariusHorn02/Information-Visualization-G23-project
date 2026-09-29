@@ -4,6 +4,8 @@ Information Visualization, Group 23, Checkpoint III: first prototype.
 
 This dashboard asks how daily rainfall in Bergen relates to city-bike use, car traffic and air quality (NO₂), for 2021–2025. It has three linked views: a horizon chart, a scatterplot and a calendar heatmap. All three use the real dataset.
 
+![Data flow](docs/flowchart.svg)
+
 ## How to run
 
 The prototype uses only D3.js v7 (a local copy in `lib/`) with plain HTML, CSS and JavaScript. It does not use npm, a build step, or the internet.
@@ -24,6 +26,7 @@ index.html              page skeleton: header + 3 panels (CSS Grid)
 css/style.css           ALL design tokens (colours, fonts, spacing) as :root variables
 lib/d3.min.js           D3 v7.9.0, local copy
 data/bergen_daily_clean.csv   dataset from CPI (1,629 days, 2021-03-04 → 2025-08-18)
+docs/flowchart.svg      data-flow diagram
 js/
   main.js               entry point: loads data, mounts every chart, wires Reset/resize/expand
   data.js               loading + per-idiom preprocessing, attribute metadata
