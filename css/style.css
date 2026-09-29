@@ -1,0 +1,468 @@
+:root {
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --fs-title: 1.75rem;
+  --fs-panel-title: 0.95rem;
+  --fs-body: 0.875rem;
+  --fs-small: 0.75rem;
+  --fs-axis: 11px;
+  --fs-axis-label: 12px;
+
+  /* ---- Neutral UI colours ---- */
+  --color-bg: #f5f6f8;
+  --color-surface: #ffffff;
+  --color-ink: #1f2328;       
+  --color-ink-soft: #57606a;   
+  --color-border: #d8dde3;
+  --color-grid: #eceff2;
+  --color-accent: #0b5cad;    
+  --color-dimmed: #c4c9cf;     
+
+  /* ---- Categorical: season ---- */
+  --season-winter: #0072b2;
+  --season-spring: #009e73;
+  --season-summer: #e69f00;
+  --season-autumn: #8c510a;
+
+  /* ---- Ordinal: rain category  ---- */
+  --rain-dry: #b9d3e8;
+  --rain-light: #6baed6;
+  --rain-moderate: #2f7fbf;
+  --rain-heavy: #08407a;
+
+  /* ---- Categorical: day type ---- */
+  --daytype-weekday: #0072b2;
+  --daytype-weekend: #e69f00;
+
+  /* ---- Diverging: temperature, cold blue → warm orange (no red) ---- */
+  --temp-0: #2166ac;
+  --temp-1: #67a9cf;
+  --temp-2: #eee3c4;
+  --temp-3: #f1a340;
+  --temp-4: #b35806;
+
+  /* ---- Sequential: bike trips ---- */
+  --bike-0: #edf8e9;
+  --bike-1: #bae4b3;
+  --bike-2: #74c476;
+  --bike-3: #31a354;
+  --bike-4: #006d2c;
+
+  /* ---- Ordinal: year ---- */
+  --year-2021: #a1dab4;
+  --year-2022: #41b6c4;
+  --year-2023: #2c7fb8;
+  --year-2024: #253494;
+  --year-2025: #081d58;
+
+  /* ---- Sequential: car traffic ---- */
+  --traffic-0: #f2f0f7;
+  --traffic-1: #cbc9e2;
+  --traffic-2: #9e9ac8;
+  --traffic-3: #756bb1;
+  --traffic-4: #54278f;
+
+  /* ---- Sequential: bike trip duration---- */
+  --duration-0: #fee0b6;
+  --duration-1: #fdb863;
+  --duration-2: #e08214;
+  --duration-3: #b35806;
+  --duration-4: #7f3b08;
+
+  /* ---- Diverging: horizon bands---- */
+  --hz-above-1: #fdb863;
+  --hz-above-2: #e08214;
+  --hz-above-3: #b35806;
+  --hz-below-1: #92c5de;
+  --hz-below-2: #4393c3;
+  --hz-below-3: #2166ac;
+  --hz-track: #f1f3f5;       
+  --hz-dimmed-1: #dcdfe3;
+  --hz-dimmed-2: #c4c9cf;
+  --hz-dimmed-3: #a9afb6;
+  --color-nodata: #eef0f2;     
+
+  /* ---- Spacing & shape ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --radius: 6px;
+  --shadow: 0 1px 2px rgba(31, 35, 40, 0.06);
+
+  /* ---- Marks & motion ---- */
+  --dot-radius: 3.5;
+  --dot-opacity: 0.6;
+  --transition-ms: 750;
+}
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html, body { margin: 0; height: 100%; }
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  color: var(--color-ink);
+  background: var(--color-bg);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+button, select { font: inherit; color: inherit; }
+
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+
+/* ---------- Header ---------- */
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.app-header .spacer { flex: 1; }
+
+.selection-status {
+  font-size: var(--fs-small);
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.btn {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-1) var(--space-4);
+  font-weight: 600;
+  font-size: var(--fs-body);
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+.btn:hover { border-color: var(--color-ink-soft); }
+
+/* Dashboard grid */
+.dashboard {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 429fr 504fr;
+  grid-template-areas:
+    "horizon  horizon"
+    "scatter  calendar";
+  gap: var(--space-5);
+  padding: 0 var(--space-5) var(--space-5);
+  min-height: 760px;
+}
+
+@media (max-width: 900px) {
+  .dashboard {
+    grid-template-columns: 1fr;
+    grid-template-rows: 320px 480px 420px;
+    grid-template-areas: "horizon" "scatter" "calendar";
+    padding: 0 var(--space-4) var(--space-4);
+  }
+  .app-header { padding: var(--space-3) var(--space-4); flex-wrap: wrap; }
+}
+
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+
+.panel--horizon  { grid-area: horizon; }
+.panel--scatter  { grid-area: scatter; }
+.panel--calendar { grid-area: calendar; }
+
+.panel__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.panel__head h2 {
+  margin: 0;
+  font-size: var(--fs-panel-title);
+  font-weight: 600;
+}
+
+.panel__head .panel__sub {
+  font-size: var(--fs-small);
+  color: var(--color-ink-soft);
+}
+
+.panel__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* Expand a panel */
+.icon-btn {
+  margin-left: auto;
+  align-self: center;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-ink-soft);
+  cursor: pointer;
+}
+.icon-btn:hover { color: var(--color-ink); border-color: var(--color-ink-soft); }
+.icon-btn svg { width: 16px; height: 16px; }
+.icon-btn .icon-collapse { display: none; }
+.panel.is-expanded .icon-btn .icon-expand { display: none; }
+.panel.is-expanded .icon-btn .icon-collapse { display: block; }
+
+.panel__head { cursor: default; }
+
+.panel.is-expanded {
+  position: fixed;
+  inset: var(--space-4);
+  z-index: 20;
+  box-shadow: 0 12px 40px rgba(31, 35, 40, 0.25);
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 19;
+  background: rgba(31, 35, 40, 0.35);
+}
+
+body.has-expanded { overflow: hidden; }
+
+/*  Toggle buttons (calendar measure) */
+.toggle {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 2px var(--space-2);
+  font-size: var(--fs-small);
+  cursor: pointer;
+}
+.toggle:hover { border-color: var(--color-ink-soft); }
+.toggle.is-active {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.toggle-group { display: inline-flex; gap: var(--space-1); }
+.toggle--action { color: var(--color-accent); border-color: var(--color-accent); }
+.toggle--action:hover { background: var(--color-bg); }
+
+.toolbar-info {
+  margin-left: auto;
+  align-self: center;
+  font-size: var(--fs-small);
+  color: var(--color-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Horizon chart ---------- */
+.axis .tick text.is-link { cursor: pointer; fill: var(--color-ink); font-weight: 600; }
+.axis .tick text.is-link:hover { fill: var(--color-accent); text-decoration: underline; }
+.hz-track { fill: var(--hz-track); }
+.hz-label { font-size: var(--fs-axis-label); fill: var(--color-ink); font-weight: 600; }
+.hz-sublabel { font-size: var(--fs-axis); fill: var(--color-ink-soft); }
+.hz-legend__label { font-size: var(--fs-axis); fill: var(--color-ink-soft); }
+.hz-rule {
+  stroke: var(--color-ink);
+  stroke-width: 1;
+  pointer-events: none;
+  opacity: 0;
+}
+.hz-rule.is-visible { opacity: 0.8; }
+.hz-rug__tick { stroke: var(--color-accent); stroke-width: 1; }
+.hz-rug__tick.is-dimmed { stroke: var(--color-dimmed); }
+.hz-rug__label { font-size: var(--fs-axis); fill: var(--color-accent); font-weight: 600; opacity: 0; }
+.hz-rug__label.is-visible { opacity: 1; }
+
+/* ---------- Calendar heatmap ---------- */
+.cal-label { font-size: var(--fs-axis); fill: var(--color-ink-soft); }
+.cal-label--tiny { font-size: 8px; }
+.cal-year__label { font-size: var(--fs-axis-label); fill: var(--color-ink); font-weight: 600; }
+.cal-cell { cursor: pointer; }
+.cal-cell.is-nodata { cursor: default; }
+.cal-cell.is-dimmed { fill: var(--color-dimmed); opacity: 0.45; }
+.cal-cell.is-selected { stroke: var(--color-ink); stroke-width: 1.3; }
+.cal-cell.is-hovered { stroke: var(--color-accent); stroke-width: 2.2; }
+.cal-year__label.is-link, .cal-weekday.is-link { cursor: pointer; }
+.cal-weekday__hit { fill: transparent; }
+.cal-year__label.is-link:hover, .cal-year__label.is-active { fill: var(--color-accent); text-decoration: underline; }
+.cal-weekday:hover text, .cal-weekday.is-active text { fill: var(--color-accent); font-weight: 700; }
+
+/* ---------- Scatterplot ---------- */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 2px var(--space-2);
+  font-size: var(--fs-small);
+  color: var(--color-ink-soft);
+}
+
+.controls select {
+  border: none;
+  background: transparent;
+  font-size: var(--fs-small);
+  color: var(--color-ink);
+  cursor: pointer;
+}
+
+.chart-area {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.chart-area > svg {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.axis text { font-family: var(--font-sans); font-size: var(--fs-axis); fill: var(--color-ink-soft); }
+.axis path, .axis line { stroke: var(--color-border); }
+.grid line { stroke: var(--color-grid); }
+.grid path { display: none; }
+.axis-label { font-size: var(--fs-axis-label); fill: var(--color-ink); }
+
+.dot {
+  fill-opacity: var(--dot-opacity);
+  stroke-width: 0.6;
+  transition: fill-opacity 150ms;
+}
+
+.dot.is-dimmed {
+  fill: var(--color-dimmed);
+  stroke: none;
+  fill-opacity: 0.35;
+}
+.dot.is-hovered {
+  fill-opacity: 1;
+  stroke: var(--color-ink);
+  stroke-width: 2;
+}
+
+.brush .selection {
+  fill: var(--color-accent);
+  fill-opacity: 0.06;
+  stroke: var(--color-accent);
+  stroke-dasharray: 3 3;
+}
+
+.chart-note {
+  font-size: var(--fs-small);
+  color: var(--color-ink-soft);
+  text-align: right;
+  min-height: 1.2em;
+}
+
+/* ---------- Legend ---------- */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1) var(--space-4);
+  padding-top: var(--space-2);
+  font-size: var(--fs-small);
+}
+
+.legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 2px var(--space-1);
+  cursor: pointer;
+}
+.legend__item:hover { border-color: var(--color-border); }
+.legend__item.is-active { border-color: var(--color-accent); }
+
+.legend__swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.legend__note { color: var(--color-ink-soft); }
+.legend__count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  background: var(--color-bg);
+  border-radius: 999px;
+  padding: 0 6px;
+}
+.legend__extra { color: var(--color-ink-soft); font-variant-numeric: tabular-nums; }
+.legend__item--static { cursor: default; }
+.legend__item--static:hover { border-color: transparent; }
+.legend__swatch--square { border-radius: 2px; }
+
+.legend__ramp {
+  width: 160px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+/*  Tooltip  */
+.tooltip {
+  position: fixed;
+  z-index: 30; 
+  pointer-events: none;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 14px rgba(31, 35, 40, 0.14);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--fs-small);
+  line-height: 1.5;
+  min-width: 170px;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.tooltip.is-visible { opacity: 1; }
+.tooltip h3 { margin: 0 0 var(--space-1); font-size: var(--fs-body); }
+.tooltip table { border-collapse: collapse; width: 100%; }
+.tooltip td { padding: 0; }
+.tooltip td + td { text-align: right; padding-left: var(--space-3); font-variant-numeric: tabular-nums; }
+.tooltip tr.is-encoded td { font-weight: 600; }
+.tooltip .muted { color: var(--color-ink-soft); }
