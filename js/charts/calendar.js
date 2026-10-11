@@ -20,18 +20,20 @@ const TOP = 16;
 
 const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
 const WEEKDAY_NAMES = ["Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays", "Sundays"];
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July",
+  "August", "September", "October", "November", "December"];
+const ADD_HINT = "Click more to add them; click again to remove";
 
 export function create(container, years, dispatcher) {
   const root = d3.select(container);
   const allDays = years.flatMap((y) => y.days);
   const rows = allDays.filter((d) => d.row).map((d) => d.row);
-  const dataRange = d3.extent(rows, (d) => d.date);
-
-  const yearRange = (y) => [
-    new Date(Math.max(+dataRange[0], Date.UTC(y, 0, 1))),
-    new Date(Math.min(+dataRange[1], Date.UTC(y, 11, 31))),
-  ];
-  const sameRange = (a, b) => a && b && +a[0] === +b[0] && +a[1] === +b[1];
+  // Day ids per month (in every year), weekday and year, for one-click group selection.
+  const idsBy = (key) => d3.group(allDays.filter((d) => d.row), key);
+  const monthIds = idsBy((d) => d.date.getUTCMonth());
+  const weekdayIds = idsBy((d) => d.weekday);
+  const yearIds = idsBy((d) => d.date.getUTCFullYear());
+  const idsOf = (map, k) => (map.get(k) ?? []).map((d) => d.id);
 
   const controls = root.append("div").attr("class", "controls");
   const buttons = controls.selectAll("button")
@@ -67,7 +69,6 @@ export function create(container, years, dispatcher) {
   let size = [0, 0];
   let last = null;
   let periodKey = null;     
-  let weekdaySel = null;
   const legendSel = legendSelector(dispatcher, `${NAME}:legend`, () => rows,
     () => COLOR_ENCODINGS[measure].field);
 
@@ -96,12 +97,15 @@ export function create(container, years, dispatcher) {
     const firstYear = years[0].year;
     monthsG.selectAll("text")
       .data(d3.utcMonths(new Date(Date.UTC(firstYear, 0, 1)), new Date(Date.UTC(firstYear + 1, 0, 1))))
-      .join("text")
-      .attr("class", "cal-label")
+      .join((enter) => enter.append("text")
+        .attr("class", "cal-label cal-month is-link")
+        .attr("role", "button")
+        .on("click", (event, m) => pick(idsOf(monthIds, m.getUTCMonth()))))
       .attr("x", (m) => (d3.utcMonday.count(d3.utcYear(m), m) + 2) * cell)
       .attr("y", -5)
       .attr("text-anchor", "middle")
-      .text((m) => (cell >= 12 ? monthFmt(m) : monthFmt(m)[0]));
+      .text((m) => (cell >= 12 ? monthFmt(m) : monthFmt(m)[0]))
+      .append("title").text((m) => `Select every ${MONTH_NAMES[m.getUTCMonth()]} (all years). ${ADD_HINT}, e.g. Jun + Jul + Aug = summer.`);
 
     const blocks = yearsG.selectAll("g.cal-year")
       .data(years, (y) => y.year)
@@ -109,10 +113,7 @@ export function create(container, years, dispatcher) {
         const b = enter.append("g").attr("class", "cal-year");
         b.append("text").attr("class", "cal-year__label is-link").attr("text-anchor", "end")
           .attr("role", "button")
-          .on("click", (event, y) => {
-            const range = yearRange(y.year);
-            dispatcher.call("zoomTime", null, sameRange(range, last?.zoom) ? null : range);
-          });
+          .on("click", (event, y) => pick(idsOf(yearIds, y.year)));
         b.append("g").attr("class", "cal-weekdays");
         b.append("g").attr("class", "cal-cells");
         return b;
@@ -122,7 +123,7 @@ export function create(container, years, dispatcher) {
     blocks.select(".cal-year__label")
       .attr("x", -16).attr("y", 3.5 * cell).attr("dy", "0.35em")
       .text((y) => y.year)
-      .append("title").text("Show only this year (click again for all years)");
+      .append("title").text(`Select every day of this year. ${ADD_HINT}.`);
 
     const weekdays = blocks.select(".cal-weekdays").selectAll("g.cal-weekday")
       .data(cell >= 5 ? WEEKDAYS.map((letter, i) => ({ letter, i })) : [])
@@ -133,11 +134,11 @@ export function create(container, years, dispatcher) {
         w.append("title");
         return w;
       })
-      .on("click", (event, d) => selectWeekday(d.i));
+      .on("click", (event, d) => pick(idsOf(weekdayIds, d.i)));
     weekdays.select("rect").attr("x", -12).attr("y", (d) => d.i * cell).attr("width", 11).attr("height", cell);
     weekdays.select("text").attr("x", -3).attr("y", (d) => (d.i + 0.5) * cell)
       .style("font-size", `${Math.min(10, cell + 1)}px`).text((d) => d.letter);
-    weekdays.select("title").text((d) => `Select all ${WEEKDAY_NAMES[d.i]}`);
+    weekdays.select("title").text((d) => `Select all ${WEEKDAY_NAMES[d.i]}. ${ADD_HINT}, e.g. S + S = weekends.`);
 
     blocks.select(".cal-cells").selectAll("rect")
       .data((y) => y.days, (d) => d.id)
@@ -185,20 +186,34 @@ export function create(container, years, dispatcher) {
 
   const key = (s) => `${s?.zoom?.map(Number)}|${s?.timeRange?.map(Number)}`;
 
-  function selectWeekday(i) {
-    const same = weekdaySel === i && last?.selectionSource === `${NAME}:weekday`;
-    weekdaySel = same ? null : i;
-    const ids = same ? null : allDays.filter((d) => d.row && d.weekday === i).map((d) => d.id);
-    dispatcher.call("brushPoints", null, { ids, source: `${NAME}:weekday` });
+  /** The calendar's own current selection (empty if the selection came from elsewhere). */
+  const ownSelection = () =>
+    new Set(last?.selectionSource === NAME && last.selectedIds ? last.selectedIds : []);
+
+  const emit = (set) => dispatcher.call("brushPoints", null, { ids: set.size ? [...set] : null, source: NAME });
+
+  /** Toggle a group of days (one day, a month, a weekday, a year): every click
+   *  adds the group to the selection, or removes it if it is already all
+   *  selected. So T then W selects Tuesdays and Wednesdays; Reset clears it. */
+  function pick(ids) {
+    if (!ids.length) return;
+    const own = ownSelection();
+    const allIn = ids.every((id) => own.has(id));
+    ids.forEach((id) => (allIn ? own.delete(id) : own.add(id)));
+    emit(own);
   }
+
+  /** A group label is active when all of its days are in the calendar's selection. */
+  const groupActive = (own, ids) => own.size > 0 && ids.length > 0 && ids.every((id) => own.has(id));
 
   function applySelection(state) {
     yearsG.selectAll(".cal-cell")
       // Only days that pass the period, the selection and the legend filter keep their colour.
       .classed("is-dimmed", (d) => d.row && !isActive(state, d.row));
-    yearsG.selectAll(".cal-year__label").classed("is-active", (y) => sameRange(yearRange(y.year), state.zoom));
-    yearsG.selectAll(".cal-weekday").classed("is-active",
-      (d) => state.selectionSource === `${NAME}:weekday` && d.i === weekdaySel);
+    const own = new Set(state.selectionSource === NAME && state.selectedIds ? state.selectedIds : []);
+    yearsG.selectAll(".cal-year__label").classed("is-active", (y) => groupActive(own, idsOf(yearIds, y.year)));
+    yearsG.selectAll(".cal-weekday").classed("is-active", (d) => groupActive(own, idsOf(weekdayIds, d.i)));
+    monthsG.selectAll(".cal-month").classed("is-active", (m) => groupActive(own, idsOf(monthIds, m.getUTCMonth())));
     if (key(state) !== periodKey) renderCalendarLegend(state);
     markLegend(legend, legendSel.active(state));
     applyHover(state);
@@ -216,6 +231,7 @@ export function create(container, years, dispatcher) {
   let dragged = false;
   let lastCell = null;  // the day the drag currently ends on
   let altZoom = false;  // the drag was started with Alt: zoom to it on release
+  let dragBase = new Set();  // selection the dragged range is added to
 
   /** Zoom so the days from a to b fill the view. */
   function zoomToDays(a, b) {
@@ -235,10 +251,12 @@ export function create(container, years, dispatcher) {
       .call(zoom.transform, centeredTransform([(x0 + x1) / 2, (y0 + y1) / 2], k, size));
   }
 
+  /** Drag: add the range a–b to the selection. */
   const selectRange = (a, b) => {
     const [from, to] = a.date <= b.date ? [a.date, b.date] : [b.date, a.date];
-    const ids = allDays.filter((d) => d.row && d.date >= from && d.date <= to).map((d) => d.id);
-    dispatcher.call("brushPoints", null, { ids, source: NAME });
+    const set = new Set(dragBase);
+    allDays.forEach((d) => { if (d.row && d.date >= from && d.date <= to) set.add(d.id); });
+    emit(set);
   };
 
   const cellDatum = (event) => (event.target.classList.contains("cal-cell") ? d3.select(event.target).datum() : null);
@@ -251,6 +269,7 @@ export function create(container, years, dispatcher) {
       anchor = lastCell = d;
       dragged = false;
       altZoom = event.altKey;
+      dragBase = ownSelection();
       tooltip.hide();
     })
     .on("pointerover", (event) => {
@@ -272,10 +291,7 @@ export function create(container, years, dispatcher) {
 
   d3.select(window).on(`pointerup.${NAME}`, () => {
     if (!anchor) return;
-    if (!dragged) {
-      const only = last?.selectionSource === NAME && last.selectedIds?.size === 1 && last.selectedIds.has(anchor.id);
-      dispatcher.call("brushPoints", null, { ids: only ? null : [anchor.id], source: NAME });
-    }
+    if (!dragged) pick([anchor.id]);
     if (altZoom) zoomToDays(anchor, lastCell);
     anchor = null;
   });

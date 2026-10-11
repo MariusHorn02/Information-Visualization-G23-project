@@ -249,7 +249,7 @@ export function create(container, series, dispatcher) {
 
     renderAxis(state);
     rule.attr("y2", rowsH + RUG_H);
-    renderLegend(colors);
+    renderLegend(colors, rows);
 
     brush.extent([[0, 0], [width, rowsH]]);
     brushG.call(brush);
@@ -276,28 +276,47 @@ export function create(container, series, dispatcher) {
       .data(zoomed ? [] : [0]).join("title").text("Show only this year");
   }
 
-  /** Legend in words: slightly / clearly / far above or below average. Each
-   *  strip's average is under its name; hover the name for one shade's size. */
-  function renderLegend(colors) {
-    const word = (sign, i) => `${SHADE_WORDS[i]} ${sign > 0 ? "above" : "below"}`;
+  /** Legend for the deviation from the 2021–25 average. With all strips shown the
+   *  shades are named in words (slightly / clearly / far), because each strip
+   *  has its own step size; with one strip shown they are labelled with that
+   *  strip's real ranges (% of its average, or °C for temperature). */
+  function renderLegend(colors, rows) {
+    const only = rows.length === 1 ? rows[0] : null;
+    const label = (sign, i) => {
+      if (!only) return `${SHADE_WORDS[i]} ${sign > 0 ? "above" : "below"}`;
+      const pm = sign > 0 ? "+" : "−";
+      const fmt = only.relative ? (v) => d3.format(".0f")(v * 100) : d3.format(".0f");
+      const unit = only.relative ? " %" : " °C";
+      return `${pm}${fmt(i * only.step)}–${fmt((i + 1) * only.step)}${unit}`;
+    };
     const items = [
-      ...colors.above.map((color, i) => ({ color, label: word(1, i) })).reverse(),
-      ...colors.below.map((color, i) => ({ color, label: word(-1, i) })),
+      ...colors.above.map((color, i) => ({ color, label: label(1, i) })).reverse(),
+      ...colors.below.map((color, i) => ({ color, label: label(-1, i) })),
     ];
     const sw = 12;
     const gap = 3;
-    const total = items.length * (sw + gap);
+    // All strips: "Above avg." on top and "Below avg." underneath; one strip:
+    // just its real ranges, no headings.
+    const head = only ? 0 : 16;
+    const foot = only ? 0 : 14;
+    const total = head + items.length * (sw + gap) + foot;
     const top = Math.max(0, (rowsH - total) / 2);
     legendG.attr("transform", `translate(${width + 16},${top})`);
     legendG.selectAll("*").remove();
+    if (!only) legendG.append("text").attr("class", "hz-legend__label").attr("y", 9).text("Above avg.");
     const item = legendG.selectAll("g.hz-legend__item").data(items).join("g")
       .attr("class", "hz-legend__item")
-      .attr("transform", (d, i) => `translate(0,${i * (sw + gap)})`);
+      .attr("transform", (d, i) => `translate(0,${head + i * (sw + gap)})`);
     item.append("rect").attr("width", 18).attr("height", sw).attr("rx", 2).attr("fill", (d) => d.color);
     item.append("text").attr("class", "hz-legend__range").attr("x", 23).attr("y", sw / 2).attr("dy", "0.35em")
       .text((d) => d.label);
-    legendG.append("title").text("Darker = further from the 2021–2025 average. Each shade is one fixed step; "
-      + "hover a strip's name for its step size, or the chart for exact values.");
+    if (!only) {
+      legendG.append("text").attr("class", "hz-legend__label")
+        .attr("y", head + items.length * (sw + gap) + 9).text("Below avg.");
+    }
+    legendG.append("title").text(only
+      ? `${only.label}: each shade = ${fmtStep(only)} from the 2021–2025 average.`
+      : "Darker = further from the 2021–2025 average. Click a strip's name to see its ranges in % (or °C).");
   }
 
   function renderToolbar(state) {

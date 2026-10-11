@@ -120,7 +120,7 @@ All colours, fonts and spacing are CSS variables in `:root` (`css/style.css`). `
 
 ### Horizon chart: long-term trends (top)
 - **Four strips**: bike trips, temperature, car traffic and NO₂. Temperature sits directly under bike trips, so Task 4 (does cycling follow the temperature cycle?) can be compared by eye.
-- **Encoding:** time is on x. Each strip shows its 7-day mean as the deviation from its own 2021–2025 average, folded into 3 bands. **Hue shows the sign** (orange = above average, blue = below). Orange vs blue stays readable with red–green colour blindness. **Colour intensity and height show the size**, with darker bands for bigger deviations. The legend names the shades in words (*slightly / clearly / far* above or below average), because one legend serves four strips with different scales. Each strip's average is under its name in real units (e.g. *avg 1,351/day*, *avg 9.2 °C*). Hovering the name gives the size of one shade ("One shade = 60% of the average ≈ 811 trips/day"), and hovering the chart gives exact values.
+- **Encoding:** time is on x. Each strip shows its 7-day mean as the deviation from its own 2021–2025 average, folded into 3 bands. **Hue shows the sign** (orange = above average, blue = below). Orange vs blue stays readable with red–green colour blindness. **Colour intensity and height show the size**, with darker bands for bigger deviations. The legend names the shades in words (*slightly / clearly / far* above or below, between the headings *Above avg.* and *Below avg.*) while all strips are shown, because one legend serves four strips with different scales. When one strip is shown on its own, the legend switches to that strip's real ranges, e.g. *+0–60 %, +60–120 %* for bike trips or *+0–5 °C* for temperature. Each strip's average is under its name in real units (e.g. *avg 1,351/day*, *avg 9.2 °C*). Hovering the name gives the size of one shade ("One shade = 60% of the average ≈ 811 trips/day"), and hovering the chart gives exact values.
 - **Why per-series deviation ("Don't distort the truth"):** bike trips average about 1,350/day and car traffic about 40,500/day. On a shared axis bikes would be a flat line; with a dual axis any "divergence" would depend on how the two axes are scaled. The trade-off is that magnitudes are not comparable across strips, so hover gives the exact values.
 - **Missing days** (traffic and NO₂ gaps) stay blank, never interpolated.
 - **Interactions:**
@@ -156,9 +156,12 @@ All colours, fonts and spacing are CSS variables in `:root` (`css/style.css`). `
 - **Colour toggle (reencoding):** **Bike trips** (Greens), **Temperature** (blue → orange), **Rain**, **Traffic** (Purples) or **Trip duration** (Oranges). Traffic shows its weekly rhythm next to the bikes' seasonal one (Task 4). Trip duration makes the weekend rows of every year darker: 11.9 vs 9.8 min (Task 6); its ramp ends at the 95th percentile, so a few 35-minute event days don't wash out the rest. Rain uses 4 ordinal steps (dry, light, moderate, heavy), and the **legend shows the number of days in each category** (Task 2). The counts follow the chosen period, e.g. 2023 alone has 41 heavy-rain days.
 - **Interactions:**
   - **Only days that pass every filter keep their colour** (marked period, selection and legend filter); all other days are greyed out.
-  - **Click a day** to select it everywhere; **drag** across days to select a date range.
-  - **Click a weekday letter** (e.g. S for Saturday) to select every such weekday.
-  - **Click a year label** to show only that year (again to show all).
+  - **Multi-select:** every click **adds** to the selection, and clicking something already selected **removes** it, so you can build any group of days. **Reset** clears it. Selected groups' labels are highlighted.
+    - **Click days** one by one, or **drag** across days to add a date range.
+    - **Click month labels** (J, F, M…) to add that month in every year, e.g. **Jun + Jul + Aug** = all summers.
+    - **Click weekday letters**, e.g. **S + S** = all weekends.
+    - **Click year labels** to add whole years.
+  - The selection combines with the scatterplot's colour category and the legend filters, e.g. *summer months AND weekends*.
   - **Click a legend category** (e.g. *Heavy*) to filter the other views to those days. It combines with a marked period or selection.
   - Days outside the period marked in the horizon chart **fade out**.
 

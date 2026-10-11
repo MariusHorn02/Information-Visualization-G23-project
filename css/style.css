@@ -294,10 +294,11 @@ button, select { font: inherit; color: inherit; }
 .cal-cell.is-nodata { cursor: default; }
 .cal-cell.is-dimmed { fill: var(--color-dimmed); opacity: 0.45; }
 .cal-cell.is-hovered { stroke: var(--color-accent); stroke-width: 2.2; }
-.cal-year__label.is-link, .cal-weekday.is-link { cursor: pointer; }
+.cal-year__label.is-link, .cal-weekday.is-link, .cal-month.is-link { cursor: pointer; }
 .cal-weekday__hit { fill: transparent; }
 .cal-year__label.is-link:hover, .cal-year__label.is-active { fill: var(--color-accent); text-decoration: underline; }
 .cal-weekday:hover text, .cal-weekday.is-active text { fill: var(--color-accent); font-weight: 700; }
+.cal-month:hover, .cal-month.is-active { fill: var(--color-accent); font-weight: 700; }
 
 /* ---------- Scatterplot ---------- */
 .controls {
