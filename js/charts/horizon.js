@@ -1,6 +1,7 @@
 import { formatValue, SMOOTH_WINDOW } from "../data.js";
-import { horizonColors } from "../theme.js";
+import { horizonColors, transitionMs } from "../theme.js";
 import * as tooltip from "../tooltip.js";
+import { zoomFilter, brushFilter, zoomResetButton, isZoomed, centeredTransform } from "../zoom.js";
 
 const NAME = "horizon";
 const MARGIN = { top: 4, right: 118, bottom: 22, left: 104 };
@@ -49,14 +50,7 @@ export function create(container, series, dispatcher) {
   const zoomBrushBtn = toolbar.append("button").attr("type", "button")
     .attr("class", "toggle toggle--action")
     .text("Zoom to period")
-    .on("click", () => {
-      const [a, b] = last.timeRange;
-      const pad = Math.max(0, (MIN_ZOOM_DAYS * DAY - (b - a)) / 2);
-      zoomTo([
-        new Date(Math.max(+fullRange[0], +a - pad)),
-        new Date(Math.min(+fullRange[1], +b + pad)),
-      ].map((d) => d3.utcDay.floor(d)));
-    });
+    .on("click", () => zoomToPeriod(last.timeRange));
   const showAllBtn = toolbar.append("button").attr("type", "button")
     .attr("class", "toggle toggle--action")
     .text("✕ Show all years")
@@ -67,8 +61,12 @@ export function create(container, series, dispatcher) {
   const svg = area.append("svg").attr("role", "img")
     .attr("aria-label", "Horizon chart of bike trips, temperature, car traffic and NO₂ relative to their average");
   const g = svg.append("g").attr("transform", `translate(${MARGIN.left},${MARGIN.top})`);
+  const defs = svg.append("defs");
   const clipId = "hz-focus-clip";
-  const focusRect = svg.append("defs").append("clipPath").attr("id", clipId)
+  const focusRect = defs.append("clipPath").attr("id", clipId)
+    .append("rect").attr("y", -10);
+  const plotClipId = "hz-plot-clip";
+  const plotRect = defs.append("clipPath").attr("id", plotClipId)
     .append("rect").attr("y", -10);
   const rowsG = g.append("g").attr("class", "hz-rows");
   const rugG = g.append("g").attr("class", "hz-rug");
@@ -78,6 +76,7 @@ export function create(container, series, dispatcher) {
   const legendG = g.append("g").attr("class", "hz-legend");
   const rule = g.append("line").attr("class", "hz-rule").attr("y1", 0);
   const brushG = g.append("g").attr("class", "brush");
+  const resetZoomBtn = zoomResetButton(area, () => g.call(zoom.transform, d3.zoomIdentity));
 
   let width = 0;
   let rowsH = 0;
@@ -86,10 +85,45 @@ export function create(container, series, dispatcher) {
   let visible = [];      
   let drawnZoom = undefined;
   let last = null;
+  // View zoom on top of the dashboard period (state.zoom). It only changes
+  // what this chart shows; it doesn't filter the other views.
+  let view = d3.zoomIdentity;
+
+  const zoom = d3.zoom()
+    .filter(zoomFilter)
+    .on("zoom", (event) => {
+      view = event.transform;
+      if (!last) return;
+      render(last);
+      syncBrush(last);
+      applyState(last);
+    });
+  g.call(zoom).on("dblclick.zoom", null);
+
+  /** Zoom this chart's view to a marked period; the mark stays. */
+  function zoomToPeriod([a, b]) {
+    const pad = Math.max(0, (MIN_ZOOM_DAYS * DAY - (b - a + DAY)) / 2);
+    const base = d3.scaleUtc().domain(last.zoom ?? fullRange).range([0, width]);
+    const x0 = base(+a - pad);
+    const x1 = base(+b + DAY + pad);
+    const k = Math.max(1, Math.min(zoom.scaleExtent()[1], width / (x1 - x0)));
+    g.transition().duration(transitionMs()).ease(d3.easeCubicInOut)
+      .call(zoom.transform, centeredTransform([(x0 + x1) / 2, rowsH / 2], k, [width, rowsH]));
+  }
+
+  function resetView() {
+    view = d3.zoomIdentity;
+    g.property("__zoom", view);
+  }
+
+  let altZoom = false;  // this brush was started with Alt: zoom to it on release
 
   const brush = d3.brushX()
+    .filter(brushFilter)
+    .keyModifiers(false)
     .on("start", (event) => {
       if (!event.sourceEvent) return;
+      altZoom = event.sourceEvent.altKey;
       tooltip.hide();
       dispatcher.call("hover", null, null);
     })
@@ -101,6 +135,7 @@ export function create(container, series, dispatcher) {
       }
       const range = event.selection.map((px) => d3.utcDay.floor(x.invert(px)));
       dispatcher.call("brushTime", null, range);
+      if (event.type === "end" && altZoom) zoomToPeriod(range);
     });
 
   function measure() {
@@ -110,14 +145,22 @@ export function create(container, series, dispatcher) {
     const height = Math.max(40, box.height - MARGIN.top - MARGIN.bottom);
     rowsH = height - RUG_H - 2;
     rowH = (rowsH - ROW_GAP * (series.length - 1)) / series.length;
+    const extent = [[0, 0], [width, rowsH]];
+    zoom.extent(extent).translateExtent(extent);
+    plotRect.attr("width", width).attr("height", rowsH + 20);
   }
 
   const slice = (values, [a, b]) => values.slice(bisect.left(values, a), bisect.right(values, b));
+  // One extra point on each side so the bands run to the (clipped) edges.
+  const slicePadded = (values, [a, b]) =>
+    values.slice(Math.max(0, bisect.left(values, a) - 1), bisect.right(values, b) + 1);
 
   function render(state) {
     const colors = horizonColors();
-    const domain = state.zoom ?? fullRange;
-    x = d3.scaleUtc().domain(domain).range([0, width]);
+    const base = state.zoom ?? fullRange;
+    zoom.scaleExtent([1, Math.max(1, (base[1] - base[0]) / (MIN_ZOOM_DAYS * DAY))]);
+    x = view.rescaleX(d3.scaleUtc().domain(base).range([0, width]));
+    const domain = x.domain();
     visible = slice(allDays, domain);
     drawnZoom = state.zoom;
 
@@ -126,7 +169,7 @@ export function create(container, series, dispatcher) {
       .join((enter) => {
         const row = enter.append("g").attr("class", "hz-row");
         row.append("rect").attr("class", "hz-track");
-        row.append("g").attr("class", "hz-bands hz-bands--dimmed");
+        row.append("g").attr("class", "hz-bands hz-bands--dimmed").attr("clip-path", `url(#${plotClipId})`);
         row.append("g").attr("class", "hz-bands hz-bands--focus").attr("clip-path", `url(#${clipId})`);
         row.append("text").attr("class", "hz-label").attr("text-anchor", "end");
         row.append("text").attr("class", "hz-sublabel").attr("text-anchor", "end");
@@ -146,7 +189,7 @@ export function create(container, series, dispatcher) {
         for (const [sign, palette] of [[1, colors.above], [-1, colors.below]]) {
           for (let i = 0; i < s.bands; i++) layers.push({ sign, i, color: palette[i], grey: colors.dimmed[i] });
         }
-        const shown = slice(values, domain);
+        const shown = slicePadded(values, domain);
         const bandPath = (layer) => d3.area()
           .defined((d) => Number.isFinite(d.dev))
           .x((d) => x(d.date))
@@ -177,7 +220,8 @@ export function create(container, series, dispatcher) {
 
   function renderAxis(state) {
     const axis = d3.axisBottom(x).tickSizeOuter(0);
-    if (!state.zoom) {
+    const zoomed = Boolean(state.zoom) || isZoomed(view);
+    if (!zoomed) {
       const [start, end] = x.domain();
       const yearTicks = d3.utcYears(d3.utcYear.ceil(start), end);
       const ticks = yearTicks.length && x(yearTicks[0]) - x(start) < 36 ? yearTicks : [start, ...yearTicks];
@@ -188,11 +232,11 @@ export function create(container, series, dispatcher) {
     }
     axisG.attr("transform", `translate(0,${rowsH + RUG_H + 2})`).call(axis);
     axisG.selectAll(".tick text")
-      .classed("is-link", !state.zoom)
-      .attr("role", state.zoom ? null : "button")
-      .on("click", state.zoom ? null : (event, d) => zoomTo(yearRange(d.getUTCFullYear())));
+      .classed("is-link", !zoomed)
+      .attr("role", zoomed ? null : "button")
+      .on("click", zoomed ? null : (event, d) => zoomTo(yearRange(d.getUTCFullYear())));
     axisG.selectAll(".tick").selectAll("title")
-      .data(state.zoom ? [] : [0]).join("title").text("Show only this year");
+      .data(zoomed ? [] : [0]).join("title").text("Show only this year");
   }
 
   function renderLegend(colors) {
@@ -219,10 +263,13 @@ export function create(container, series, dispatcher) {
 
     const smoothing = `${SMOOTH_WINDOW}-day mean`;
     const activeYear = years.find((y) => sameRange(yearRange(y), state.zoom));
-    const period = !state.zoom ? "All years"
+    const [v0, v1] = x.domain();
+    const period = isZoomed(view) ? `${fmtDay(v0)} – ${fmtDay(v1)}`
+      : !state.zoom ? "All years"
       : activeYear ? `${activeYear}`
       : `${fmtDay(state.zoom[0])} – ${fmtDay(state.zoom[1])}`;
     info.text(`${period} · ${smoothing}`);
+    resetZoomBtn.attr("hidden", isZoomed(view) ? null : true);
   }
 
   function applyState(state) {
@@ -252,9 +299,15 @@ export function create(container, series, dispatcher) {
 
     const current = d3.brushSelection(brushG.node());
     if (!state.timeRange && current) brushG.call(brush.move, null);
-    if (state.timeRange && !current) brushG.call(brush.move, state.timeRange.map(x));
+    if (state.timeRange && !current) syncBrush(state);
     renderToolbar(state);
     applyHover(state);
+  }
+
+  /** Place the brush over the marked period, clipped to the visible range. */
+  function syncBrush(state) {
+    const sel = state.timeRange?.map((d) => Math.max(0, Math.min(width, x(d))));
+    brushG.call(brush.move, sel && sel[1] > sel[0] ? sel : null);
   }
 
   function applyHover(state) {
@@ -296,16 +349,21 @@ export function create(container, series, dispatcher) {
       if (reason === "init") { measure(); render(state); }
       if (reason === "hover") return applyHover(state);
       if (state.zoom !== drawnZoom) {
+        resetView();
         render(state);
         rowsG.style("opacity", 0.2).transition().duration(250).style("opacity", 1);
+      } else if (reason === "reset" && isZoomed(view)) {
+        resetView();
+        render(state);
       }
       applyState(state);
     },
     resize() {
       if (!last) return;
+      resetView();
       measure();
       render(last);
-      brushG.call(brush.move, last.timeRange ? last.timeRange.map(x) : null);
+      syncBrush(last);
       applyState(last);
     },
   };

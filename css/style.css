@@ -203,6 +203,7 @@ button, select { font: inherit; color: inherit; }
   margin: 0;
   font-size: var(--fs-panel-title);
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .panel__head .panel__sub {
@@ -218,44 +219,23 @@ button, select { font: inherit; color: inherit; }
   position: relative;
 }
 
-/* Expand a panel */
-.icon-btn {
-  margin-left: auto;
-  align-self: center;
-  display: inline-grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
+/* Zoom */
+.zoom-reset {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  z-index: 1;
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-accent);
   border-radius: var(--radius);
-  color: var(--color-ink-soft);
+  padding: 2px var(--space-2);
+  font-size: var(--fs-small);
+  color: var(--color-accent);
+  box-shadow: var(--shadow);
   cursor: pointer;
 }
-.icon-btn:hover { color: var(--color-ink); border-color: var(--color-ink-soft); }
-.icon-btn svg { width: 16px; height: 16px; }
-.icon-btn .icon-collapse { display: none; }
-.panel.is-expanded .icon-btn .icon-expand { display: none; }
-.panel.is-expanded .icon-btn .icon-collapse { display: block; }
-
-.panel__head { cursor: default; }
-
-.panel.is-expanded {
-  position: fixed;
-  inset: var(--space-4);
-  z-index: 20;
-  box-shadow: 0 12px 40px rgba(31, 35, 40, 0.25);
-}
-
-.backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 19;
-  background: rgba(31, 35, 40, 0.35);
-}
-
-body.has-expanded { overflow: hidden; }
+.zoom-reset:hover { background: var(--color-bg); }
+.zoom-reset[hidden] { display: none; }
 
 /*  Toggle buttons (calendar measure) */
 .toggle {
@@ -308,7 +288,7 @@ body.has-expanded { overflow: hidden; }
 .cal-label { font-size: var(--fs-axis); fill: var(--color-ink-soft); }
 .cal-label--tiny { font-size: 8px; }
 .cal-year__label { font-size: var(--fs-axis-label); fill: var(--color-ink); font-weight: 600; }
-.cal-cell { cursor: pointer; }
+.cal-cell { cursor: pointer; vector-effect: non-scaling-stroke; }
 .cal-cell.is-nodata { cursor: default; }
 .cal-cell.is-dimmed { fill: var(--color-dimmed); opacity: 0.45; }
 .cal-cell.is-selected { stroke: var(--color-ink); stroke-width: 1.3; }

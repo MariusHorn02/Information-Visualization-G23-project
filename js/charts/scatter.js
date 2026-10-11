@@ -3,8 +3,10 @@ import { COLOR_ENCODINGS, colorScale, transitionMs, dotRadius } from "../theme.j
 import { isActive, hasFilter, inPeriod } from "../state.js";
 import { renderLegend, markLegend, legendSelector } from "../legend.js";
 import * as tooltip from "../tooltip.js";
+import { zoomFilter, brushFilter, zoomResetButton, isZoomed, centeredTransform } from "../zoom.js";
 
 const NAME = "scatter";
+const MAX_ZOOM = 20;
 const MARGIN = { top: 10, right: 18, bottom: 42, left: 70 };
 const HOVER_RADIUS = 14;
 const JITTER = 5;        
@@ -52,9 +54,11 @@ export function create(container, data, dispatcher) {
   const labelX = g.append("text").attr("class", "axis-label").attr("text-anchor", "middle");
   const labelY = g.append("text").attr("class", "axis-label").attr("text-anchor", "middle")
     .attr("transform", "rotate(-90)");
-  const dotsG = g.append("g").attr("class", "dots");
+  const clipRect = svg.append("defs").append("clipPath").attr("id", "sc-plot-clip").append("rect");
+  const dotsG = g.append("g").attr("class", "dots").attr("clip-path", "url(#sc-plot-clip)");
 
   const brushG = g.append("g").attr("class", "brush");
+  const resetZoomBtn = zoomResetButton(area, () => g.call(zoom.transform, d3.zoomIdentity));
 
   const note = root.append("div").attr("class", "chart-note");
   const legend = root.append("div").attr("class", "legend");
@@ -63,7 +67,8 @@ export function create(container, data, dispatcher) {
   let height = 0;
   let enc = null;         
   let points = [];    
-  let x, y, color, delaunay;
+  let x0, y0;             // scales for the full data extent
+  let x, y, color, delaunay; // x0/y0 rescaled by the current zoom
   let periodKey = null;  
   let last = null;
   const legendSel = legendSelector(dispatcher, `${NAME}:legend`, () => data,
@@ -73,9 +78,21 @@ export function create(container, data, dispatcher) {
   const px = (d) => x(d[enc.x]) + offset(enc.x, d);
   const py = (d) => y(d[enc.y]) - offset(enc.y, d);
 
+  const zoom = d3.zoom()
+    .scaleExtent([1, MAX_ZOOM])
+    .filter(zoomFilter)
+    .on("zoom", zoomed);
+  g.call(zoom).on("dblclick.zoom", null);
+
+  let brushRect = null;   // marked rectangle in data units, so it follows the zoom
+  let altZoom = false;    // this brush was started with Alt: zoom to it on release
+
   const brush = d3.brush()
+    .filter(brushFilter)
+    .keyModifiers(false)
     .on("start", (event) => {
       if (!event.sourceEvent) return;
+      altZoom = event.sourceEvent.altKey;
       tooltip.hide();
       dispatcher.call("hover", null, null);
     })
@@ -103,9 +120,17 @@ export function create(container, data, dispatcher) {
     enc = { ...state.encodings.scatter };
     points = data.filter((d) => finite(d[enc.x]) && finite(d[enc.y]));
 
-    x = makeScale(enc.x, [0, width]);
-    y = makeScale(enc.y, [height, 0]);
+    x = x0 = makeScale(enc.x, [0, width]);
+    y = y0 = makeScale(enc.y, [height, 0]);
     color = colorScale(enc.color, data);
+
+    // New axes or a new size: start from the full view again. Setting __zoom
+    // directly resets the zoom state without firing a "zoom" event.
+    const extent = [[0, 0], [width, height]];
+    zoom.extent(extent).translateExtent(extent);
+    g.property("__zoom", d3.zoomIdentity);
+    resetZoomBtn.attr("hidden", true);
+    clipRect.attr("width", width).attr("height", height);
 
     const t = animate
       ? svg.transition("encode").duration(transitionMs()).ease(d3.easeCubicInOut)
@@ -114,12 +139,7 @@ export function create(container, data, dispatcher) {
 
     svg.attr("aria-label", `Scatterplot of ${attrLabel(enc.y)} against ${attrLabel(enc.x)}, coloured by ${COLOR_ENCODINGS[enc.color].label}`);
 
-    const xTicks = Math.max(2, Math.floor(width / 80));
-    const yTicks = Math.max(2, Math.floor(height / 50));
-    T(axisX.attr("transform", `translate(0,${height})`)).call(d3.axisBottom(x).ticks(xTicks));
-    T(axisY).call(d3.axisLeft(y).ticks(yTicks));
-    T(gridX).call(d3.axisBottom(x).ticks(xTicks).tickSize(height).tickFormat(""));
-    T(gridY).call(d3.axisLeft(y).ticks(yTicks).tickSize(-width).tickFormat(""));
+    renderAxes(T);
 
     labelX.attr("x", width / 2).attr("y", height + 36).text(attrLabel(enc.x));
     labelY.attr("x", -height / 2).attr("y", -56).text(attrLabel(enc.y));
@@ -146,12 +166,56 @@ export function create(container, data, dispatcher) {
     brush.extent([[0, 0], [width, height]]);
     brushG.call(brush);
     brushG.call(brush.move, null);
+    brushRect = null;
 
     const hidden = data.length - points.length;
     note.text(hidden ? `${hidden} day${hidden > 1 ? "s" : ""} not shown (missing ${[enc.x, enc.y]
       .filter((k) => data.some((d) => !finite(d[k]))).map((k) => ATTRIBUTES[k].label).join(" / ")} value)` : "");
 
     renderCorrelationLegend(state);
+  }
+
+  function renderAxes(T) {
+    const xTicks = Math.max(2, Math.floor(width / 80));
+    const yTicks = Math.max(2, Math.floor(height / 50));
+    T(axisX.attr("transform", `translate(0,${height})`)).call(d3.axisBottom(x).ticks(xTicks));
+    T(axisY).call(d3.axisLeft(y).ticks(yTicks));
+    T(gridX).call(d3.axisBottom(x).ticks(xTicks).tickSize(height).tickFormat(""));
+    T(gridY).call(d3.axisLeft(y).ticks(yTicks).tickSize(-width).tickFormat(""));
+  }
+
+  function zoomed(event) {
+    if (!x0) return;
+    x = event.transform.rescaleX(x0);
+    y = event.transform.rescaleY(y0);
+    renderAxes((sel) => sel.interrupt());
+    const r = dotRadius();
+    dotsG.selectAll("circle").interrupt()
+      .attr("cx", px).attr("cy", py)
+      .attr("r", (d) => (d.id === last?.hoveredId ? r * 2 : r));
+    delaunay = d3.Delaunay.from(points, px, py);
+    syncBrush();
+    resetZoomBtn.attr("hidden", isZoomed(event.transform) ? null : true);
+  }
+
+  /** Redraw the marked rectangle at its data position in the current view. */
+  function syncBrush() {
+    if (!brushRect || last?.selectionSource !== NAME) return brushG.call(brush.move, null);
+    const cx = (v) => Math.max(0, Math.min(width, x(v)));
+    const cy = (v) => Math.max(0, Math.min(height, y(v)));
+    const [[a, b], [c, d]] = brushRect;
+    const sel = [[cx(a), cy(b)], [cx(c), cy(d)]];
+    brushG.call(brush.move, sel[1][0] > sel[0][0] && sel[1][1] > sel[0][1] ? sel : null);
+  }
+
+  /** Zoom so the pixel rectangle [[x0, y0], [x1, y1]] fills the plot. */
+  function zoomToRect([[x0, y0], [x1, y1]]) {
+    const t = d3.zoomTransform(g.node());
+    const fit = Math.min(width / Math.max(1, x1 - x0), height / Math.max(1, y1 - y0));
+    const k = Math.max(1, Math.min(MAX_ZOOM, t.k * fit));
+    const center = [t.invertX((x0 + x1) / 2), t.invertY((y0 + y1) / 2)];
+    g.transition().duration(transitionMs()).ease(d3.easeCubicInOut)
+      .call(zoom.transform, centeredTransform(center, k, [width, height]));
   }
 
   function renderCorrelationLegend(state) {
@@ -207,9 +271,10 @@ export function create(container, data, dispatcher) {
   }
 
   function brushed(event) {
-    if (!event.sourceEvent) return; 
+    if (!event.sourceEvent) return;
     if (!event.selection) {
       if (event.type !== "end") return;
+      brushRect = null;
       const d = pointAt(event.sourceEvent);
       const onlyThis = d && last?.selectionSource === NAME && last.selectedIds?.size === 1 && last.selectedIds.has(d.id);
       if (d && !onlyThis) dispatcher.call("brushPoints", null, { ids: [d.id], source: NAME });
@@ -220,7 +285,9 @@ export function create(container, data, dispatcher) {
     const ids = points
       .filter((d) => { const cx = px(d), cy = py(d); return cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1; })
       .map((d) => d.id);
+    brushRect = [[x.invert(x0), y.invert(y0)], [x.invert(x1), y.invert(y1)]];
     dispatcher.call("brushPoints", null, { ids, source: NAME });
+    if (event.type === "end" && altZoom) zoomToRect(event.selection);
   }
 
   brushG
@@ -252,6 +319,7 @@ export function create(container, data, dispatcher) {
     update(state, reason) {
       last = state;
       if (reason === "hover") return applyHover(state);
+      if (reason === "reset" && isZoomed(d3.zoomTransform(g.node()))) g.call(zoom.transform, d3.zoomIdentity);
 
       const wanted = state.encodings.scatter;
       const encodingChanged = !enc || CHANNELS.some((c) => enc[c] !== wanted[c]);
@@ -260,6 +328,7 @@ export function create(container, data, dispatcher) {
         if (!enc) measure();
         render(state, Boolean(enc)); 
       } else if (state.selectionSource !== NAME) {
+        brushRect = null;
         brushG.call(brush.move, null);
       }
       applySelection(state);

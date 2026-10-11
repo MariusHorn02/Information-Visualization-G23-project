@@ -1,6 +1,5 @@
 import * as Data from "./data.js";
 import { state, dispatcher, register, isActive, hasFilter } from "./state.js";
-import { makeExpandable } from "./expand.js";
 
 const CHARTS = [
   { id: "horizon",  module: "./charts/horizon.js",  prepare: Data.getHorizonData },
@@ -9,27 +8,35 @@ const CHARTS = [
 ];
 
 async function init() {
-  const rows = await Data.loadData();
+  // Load data and chart modules in parallel, then build every panel before
+  // drawing, so earlier charts aren't re-laid-out as later ones appear.
+  const [rows, modules] = await Promise.all([
+    Data.loadData(),
+    Promise.all(CHARTS.map(({ module }) => import(module))),
+  ]);
 
-  for (const { id, module, prepare } of CHARTS) {
+  const charts = CHARTS.map(({ id, prepare }, i) => {
     const container = document.querySelector(`[data-chart="${id}"]`);
-    const { create } = await import(module);
-    const chart = create(container, prepare(rows), dispatcher);
+    const chart = modules[i].create(container, prepare(rows), dispatcher);
     register(id, chart);
-    chart.update(state, "init");
-    observeSize(container, chart);
-    makeExpandable(container.closest(".panel"));
-  }
+    return { container, chart };
+  });
+
+  charts.forEach(({ chart }) => chart.update(state, "init"));
+  charts.forEach(({ container, chart }) => observeSize(container, chart));
 
   wireGlobalUi(rows);
 }
 
 function observeSize(container, chart) {
   const targets = [container, ...container.querySelectorAll(".chart-area")];
+  const sizeKey = () => targets.map((el) => `${el.clientWidth}x${el.clientHeight}`).join(",");
   let frame = null;
-  let lastSize = "";
+  // Start from the size the chart was just drawn at, so the observer's
+  // initial callback doesn't trigger a redundant redraw.
+  let lastSize = sizeKey();
   const observer = new ResizeObserver(() => {
-    const size = targets.map((el) => `${el.clientWidth}x${el.clientHeight}`).join(",");
+    const size = sizeKey();
     if (size === lastSize) return;
     lastSize = size;
     cancelAnimationFrame(frame);

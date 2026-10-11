@@ -1,9 +1,11 @@
-import { COLOR_ENCODINGS, colorScale, cssVar } from "../theme.js";
+import { COLOR_ENCODINGS, colorScale, cssVar, transitionMs } from "../theme.js";
 import { inPeriod } from "../state.js";
 import { renderLegend, markLegend, legendSelector } from "../legend.js";
 import * as tooltip from "../tooltip.js";
+import { zoomFilter, zoomResetButton, isZoomed, centeredTransform } from "../zoom.js";
 
 const NAME = "calendar";
+const MAX_ZOOM = 8;
 const MEASURES = [
   { key: "bike_trips", label: "Bike trips / day" },
   { key: "temp_c", label: "Temperature" },
@@ -42,7 +44,18 @@ export function create(container, years, dispatcher) {
 
   const area = root.append("div").attr("class", "chart-area");
   const svg = area.append("svg").attr("role", "img");
-  const g = svg.append("g");
+  // Zooming scales the whole calendar, so cells, labels and gaps grow together.
+  const zoomG = svg.append("g");
+  const g = zoomG.append("g");
+  const resetZoomBtn = zoomResetButton(area, () => svg.call(zoom.transform, d3.zoomIdentity));
+  const zoom = d3.zoom()
+    .scaleExtent([1, MAX_ZOOM])
+    .filter(zoomFilter)
+    .on("zoom", (event) => {
+      zoomG.attr("transform", event.transform);
+      resetZoomBtn.attr("hidden", isZoomed(event.transform) ? null : true);
+    });
+  svg.call(zoom).on("dblclick.zoom", null);
   const monthsG = g.append("g").attr("class", "cal-months");
   const yearsG = g.append("g").attr("class", "cal-years");
   const legend = root.append("div").attr("class", "legend");
@@ -50,6 +63,8 @@ export function create(container, years, dispatcher) {
   let measure = null;
   let color;
   let cell = 10;
+  let origin = [0, 0];  // top-left of the first year block, in svg pixels
+  let size = [0, 0];
   let last = null;
   let periodKey = null;     
   let weekdaySel = null;
@@ -59,11 +74,16 @@ export function create(container, years, dispatcher) {
   function layout() {
     const box = area.node().getBoundingClientRect();
     svg.attr("width", box.width).attr("height", box.height);
+    const extent = [[0, 0], [box.width, box.height]];
+    zoom.extent(extent).translateExtent(extent);
+    svg.call(zoom.transform, d3.zoomIdentity);
     const byWidth = (box.width - LEFT - 4) / WEEKS;
     const byHeight = (box.height - TOP - 2) / (years.length * 7 + (years.length - 1) * YEAR_GAP);
     cell = Math.max(3, Math.floor(Math.min(byWidth, byHeight) * 2) / 2);
     const gridW = LEFT + WEEKS * cell;
-    g.attr("transform", `translate(${Math.max(0, (box.width - gridW) / 2) + LEFT},${TOP})`);
+    origin = [Math.max(0, (box.width - gridW) / 2) + LEFT, TOP];
+    size = [box.width, box.height];
+    g.attr("transform", `translate(${origin})`);
   }
 
   const yearY = (i) => i * cell * (7 + YEAR_GAP);
@@ -195,6 +215,26 @@ export function create(container, years, dispatcher) {
 
   let anchor = null;  
   let dragged = false;
+  let lastCell = null;  // the day the drag currently ends on
+  let altZoom = false;  // the drag was started with Alt: zoom to it on release
+
+  /** Zoom so the days from a to b fill the view. */
+  function zoomToDays(a, b) {
+    const [from, to] = a.date <= b.date ? [a.date, b.date] : [b.date, a.date];
+    const firstYear = years[0].year;
+    const xs = [];
+    const ys = [];
+    for (const d of allDays) {
+      if (d.date < from || d.date > to) continue;
+      xs.push(origin[0] + d.week * cell);
+      ys.push(origin[1] + yearY(d.date.getUTCFullYear() - firstYear) + d.weekday * cell);
+    }
+    const [x0, x1] = [d3.min(xs), d3.max(xs) + cell];
+    const [y0, y1] = [d3.min(ys), d3.max(ys) + cell];
+    const k = Math.max(1, Math.min(MAX_ZOOM, 0.85 * Math.min(size[0] / (x1 - x0), size[1] / (y1 - y0))));
+    svg.transition().duration(transitionMs()).ease(d3.easeCubicInOut)
+      .call(zoom.transform, centeredTransform([(x0 + x1) / 2, (y0 + y1) / 2], k, size));
+  }
 
   const selectRange = (a, b) => {
     const [from, to] = a.date <= b.date ? [a.date, b.date] : [b.date, a.date];
@@ -207,17 +247,18 @@ export function create(container, years, dispatcher) {
   yearsG
     .on("pointerdown", (event) => {
       const d = cellDatum(event);
-      if (!d?.row) return;
-      event.preventDefault(); 
-      anchor = d;
+      if (!d?.row || event.shiftKey) return; // Shift+drag pans the zoomed view
+      event.preventDefault();
+      anchor = lastCell = d;
       dragged = false;
+      altZoom = event.altKey;
       tooltip.hide();
     })
     .on("pointerover", (event) => {
       const d = cellDatum(event);
       if (!d) return;
       if (anchor) {
-        if (d.row && d !== anchor) { dragged = true; selectRange(anchor, d); }
+        if (d.row && d !== anchor) { dragged = true; lastCell = d; selectRange(anchor, d); }
         return;
       }
       if (!d.row) { tooltip.hide(); dispatcher.call("hover", null, null); return; }
@@ -236,6 +277,7 @@ export function create(container, years, dispatcher) {
       const only = last?.selectionSource === NAME && last.selectedIds?.size === 1 && last.selectedIds.has(anchor.id);
       dispatcher.call("brushPoints", null, { ids: only ? null : [anchor.id], source: NAME });
     }
+    if (altZoom) zoomToDays(anchor, lastCell);
     anchor = null;
   });
 
@@ -243,6 +285,7 @@ export function create(container, years, dispatcher) {
     update(state, reason) {
       last = state;
       if (reason === "hover") return applyHover(state);
+      if (reason === "reset") svg.call(zoom.transform, d3.zoomIdentity);
       const wanted = state.encodings.calendar.measure;
       if (reason === "init") {
         measure = wanted;

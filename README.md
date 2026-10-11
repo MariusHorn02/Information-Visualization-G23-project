@@ -28,13 +28,13 @@ lib/d3.min.js           D3 v7.9.0, local copy
 data/bergen_daily_clean.csv   dataset from CPI (1,629 days, 2021-03-04 → 2025-08-18)
 docs/flowchart.svg      data-flow diagram
 js/
-  main.js               entry point: loads data, mounts every chart, wires Reset/resize/expand
+  main.js               entry point: loads data, mounts every chart, wires Reset/resize
   data.js               loading + per-idiom preprocessing, attribute metadata
   state.js              shared state object + d3.dispatch event bus
   theme.js              reads colour tokens from CSS → d3 colour scales
   legend.js             one legend renderer for all charts
   tooltip.js            one tooltip for all charts
-  expand.js             expand any panel to full screen
+  zoom.js               shared zoom / pan / mark-and-zoom behaviour
   charts/
     horizon.js          horizon chart
     scatter.js          scatterplot
@@ -105,9 +105,9 @@ const CHARTS = [
 ];
 ```
 
-For each entry it imports the module, gives it its prepared data, registers it on the dispatcher, attaches a `ResizeObserver` and adds the expand button to its panel.
+For each entry it imports the module, gives it its prepared data, registers it on the dispatcher, and attaches a `ResizeObserver`.
 
-**To add an idiom**, write `js/charts/<name>.js` with the standard interface and add one line to `CHARTS` (and give it a panel in the layout). Linking, resizing and full-screen mode then work for it automatically.
+**To add an idiom**, write `js/charts/<name>.js` with the standard interface and add one line to `CHARTS` (and give it a panel in the layout). Linking and resizing then work for it automatically.
 
 ### 5. Visual coherence
 All colours, fonts and spacing are CSS variables in `:root` (`css/style.css`). `theme.js` reads the data colours from those same variables, and `legend.js` and `tooltip.js` are shared by all charts. This means every idiom uses one palette, one font, one legend style and one tooltip style.
@@ -121,7 +121,7 @@ All colours, fonts and spacing are CSS variables in `:root` (`css/style.css`). `
 - **Missing days** (traffic and NO₂ gaps) stay blank, never interpolated.
 - **Interactions:**
   - **Hover** shows the date range of the 7-day window, the 7-day mean and the deviation for all four strips, and highlights that day everywhere.
-  - **Drag** along the time axis to mark a period (`brushTime`). This filters the other two views, and outside the period the bands turn grey. **Zoom to period** then zooms into exactly the marked period.
+  - **Drag** along the time axis to mark a period (`brushTime`). This filters the other two views, and outside the period the bands turn grey. **Zoom to period** (or marking with **Alt+drag**) then zooms the chart into the marked period, and the period stays marked.
   - **Year buttons** (2021–2025), or a **click on a year label** on the axis, show only that year (`zoomTime`). The whole dashboard follows. **✕ Show all years** goes back.
   - A **vertical rule** follows a day hovered in any view.
   - The **"Selected days" rug** under the strips has one tick per day selected in the scatterplot or calendar.
@@ -157,9 +157,18 @@ All colours, fonts and spacing are CSS variables in `:root` (`css/style.css`). `
   - Days outside the period marked in the horizon chart **fade out**.
 
 ### Shared UI
-- **Reset** (in the header) clears all selections, filters and the zoom. View settings such as the scatterplot axes and the calendar measure are kept.
+- **Reset** (in the header) clears all selections, filters and zooms. View settings such as the scatterplot axes and the calendar measure are kept.
 - The header shows the active period and how many days are selected.
-- **Expand**: every panel has a ⤢ button in its top-right corner (double-clicking the panel title also works). It makes that chart fill the browser window, and the chart redraws at the larger size. Close it with **Esc**, the button again, or a click outside the panel.
+- **Zoom and pan**: in every chart the same gestures apply:
+
+  | Gesture | Effect |
+  |---|---|
+  | drag | mark (select) without zooming |
+  | **Alt/Option + drag** | mark, then zoom so the marked part fills the chart; it stays marked |
+  | **Shift + drag** | pan the zoomed view |
+  | mouse wheel / trackpad pinch | zoom around the cursor |
+
+  The horizon chart zooms along the time axis, the scatterplot zooms both axes and redraws its ticks (the brushed rectangle follows the zoom), and the calendar zooms geometrically so the cells get bigger. This zoom only changes that chart's view; it doesn't filter the other views. A **Reset zoom** button appears in the chart's corner while zoomed, and the header **Reset** also resets every chart's zoom.
 
 ## Which idioms answer each task
 
