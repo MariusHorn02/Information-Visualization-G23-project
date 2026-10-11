@@ -1,5 +1,5 @@
 import { COLOR_ENCODINGS, colorScale, cssVar, transitionMs } from "../theme.js";
-import { inPeriod } from "../state.js";
+import { inPeriod, isActive } from "../state.js";
 import { renderLegend, markLegend, legendSelector } from "../legend.js";
 import * as tooltip from "../tooltip.js";
 import { zoomFilter, zoomResetButton, isZoomed, centeredTransform } from "../zoom.js";
@@ -194,9 +194,8 @@ export function create(container, years, dispatcher) {
 
   function applySelection(state) {
     yearsG.selectAll(".cal-cell")
-      .classed("is-dimmed", (d) => d.row && !inPeriod(state, d.row))
-      .classed("is-selected", (d) => Boolean(d.row && state.selectedIds?.has(d.id) && inPeriod(state, d.row)));
-    yearsG.selectAll(".cal-cell.is-selected").raise();
+      // Only days that pass the period, the selection and the legend filter keep their colour.
+      .classed("is-dimmed", (d) => d.row && !isActive(state, d.row));
     yearsG.selectAll(".cal-year__label").classed("is-active", (y) => sameRange(yearRange(y.year), state.zoom));
     yearsG.selectAll(".cal-weekday").classed("is-active",
       (d) => state.selectionSource === `${NAME}:weekday` && d.i === weekdaySel);

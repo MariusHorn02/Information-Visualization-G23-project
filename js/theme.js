@@ -21,7 +21,7 @@ export const COLOR_ENCODINGS = {
     field: "rain_category",
     domain: ["Dry", "Light", "Moderate", "Heavy"],
     vars: ["--rain-dry", "--rain-light", "--rain-moderate", "--rain-heavy"],
-    note: "Dry 0 · Light <5 · Moderate 5–20 · Heavy ≥20 mm",
+    ranges: { Dry: "0 mm", Light: "under 5 mm", Moderate: "5–20 mm", Heavy: "20 mm or more" },
   },
   day_type: {
     label: "Weekday / weekend",

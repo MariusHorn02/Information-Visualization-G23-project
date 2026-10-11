@@ -39,6 +39,6 @@ export function dayHtml(d, highlight = []) {
   const rows = Object.keys(ATTRIBUTES).map((k) =>
     `<tr class="${bold.has(k) ? "is-encoded" : ""}"><td>${ATTRIBUTES[k].label}</td><td>${formatValue(k, d[k])}</td></tr>`);
   return `<h3>${fmtDate(d.date)}</h3>
-    <div class="muted">${d.season} · ${d.day_type} · ${d.rain_category} rain</div>
+    <div class="muted tooltip__sub">${d.season} · ${d.day_type} · ${d.rain_category} rain</div>
     <table>${rows.join("")}</table>`;
 }

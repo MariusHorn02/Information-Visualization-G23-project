@@ -76,16 +76,18 @@ The whole dashboard shares one state object:
 | `timeRange` | `[start, end]` period brushed in the horizon chart (inside the zoom) |
 | `selectedIds` | set of selected day ids, from any chart |
 | `selectionSource` | which chart made the selection |
+| `filterIds` | set of day ids of a legend category (e.g. Winter); kept separate so it combines with the selection |
+| `filterSource` | which legend set the filter |
 | `hoveredId` | day under the pointer in any view |
 | `encodings` | view settings: `scatter {x, y, color}`, `calendar {measure}` |
 
 Data flows in one direction only:
 
-1. A chart **emits an intent** through the `d3.dispatch` bus (`zoomTime`, `brushTime`, `brushPoints`, `hover`, `encode`, `reset`).
+1. A chart **emits an intent** through the `d3.dispatch` bus (`zoomTime`, `brushTime`, `brushPoints`, `filter`, `hover`, `encode`, `reset`).
 2. `state.js` updates the state and fires **`change`**.
 3. Every registered chart receives `update(state, reason)` and redraws itself.
 
-Charts never reference each other. Every idiom shows days, so the day `id` is the shared key that links them. A selection made in any view is a set of ids, and every other view can resolve those ids in its own data. `isActive(state, day)` combines the zoom, the brushed period and the day selection, so every chart applies the same rule.
+Charts never reference each other. Every idiom shows days, so the day `id` is the shared key that links them. A selection made in any view is a set of ids, and every other view can resolve those ids in its own data. `isActive(state, day)` combines the zoom, the brushed period, the day selection and the legend filter (all must pass), so every chart applies the same rule. Filters never cancel each other: mark a period, then click *Winter*, and only the winter days inside that period stay active.
 
 ### 3. Chart modules: `js/charts/*.js`
 Every chart exports the same interface:
@@ -112,18 +114,22 @@ For each entry it imports the module, gives it its prepared data, registers it o
 ### 5. Visual coherence
 All colours, fonts and spacing are CSS variables in `:root` (`css/style.css`). `theme.js` reads the data colours from those same variables, and `legend.js` and `tooltip.js` are shared by all charts. This means every idiom uses one palette, one font, one legend style and one tooltip style.
 
+**Scatterplot colours never reuse a hue from the other panels.** The trends chart uses orange/blue (above/below average) and the calendar uses green, blue, purple and orange ramps, so the seasons use cyan, yellow, red and purple instead: a winter dot can't be mistaken for "below average". Checked with an OKLab ΔE validator: the four seasons stay apart for red–green colour blindness (ΔE ≥ 19) and are clearly different hues from the trends and default calendar colours.
+
 ## The idioms
 
 ### Horizon chart: long-term trends (top)
 - **Four strips**: bike trips, temperature, car traffic and NO₂. Temperature sits directly under bike trips, so Task 4 (does cycling follow the temperature cycle?) can be compared by eye.
-- **Encoding:** time is on x. Each strip shows its 7-day mean as the deviation from its own 2021–2025 average, folded into 3 bands. **Hue shows the sign** (orange = above average, blue = below). The dashboard uses **no red at all**, so red and green never appear together and the colours stay readable with red–green colour blindness. **Colour intensity and height show the size**, with darker bands for bigger deviations. Next to each label, "band = …" gives what one band represents (e.g. 60 % or 5 °C).
+- **Encoding:** time is on x. Each strip shows its 7-day mean as the deviation from its own 2021–2025 average, folded into 3 bands. **Hue shows the sign** (orange = above average, blue = below). Orange vs blue stays readable with red–green colour blindness. **Colour intensity and height show the size**, with darker bands for bigger deviations. The legend names the shades in words (*slightly / clearly / far* above or below average), because one legend serves four strips with different scales. Each strip's average is under its name in real units (e.g. *avg 1,351/day*, *avg 9.2 °C*). Hovering the name gives the size of one shade ("One shade = 60% of the average ≈ 811 trips/day"), and hovering the chart gives exact values.
 - **Why per-series deviation ("Don't distort the truth"):** bike trips average about 1,350/day and car traffic about 40,500/day. On a shared axis bikes would be a flat line; with a dual axis any "divergence" would depend on how the two axes are scaled. The trade-off is that magnitudes are not comparable across strips, so hover gives the exact values.
 - **Missing days** (traffic and NO₂ gaps) stay blank, never interpolated.
 - **Interactions:**
   - **Hover** shows the date range of the 7-day window, the 7-day mean and the deviation for all four strips, and highlights that day everywhere.
   - **Drag** along the time axis to mark a period (`brushTime`). This filters the other two views, and outside the period the bands turn grey. **Zoom to period** (or marking with **Alt+drag**) then zooms the chart into the marked period, and the period stays marked.
   - **Year buttons** (2021–2025), or a **click on a year label** on the axis, show only that year (`zoomTime`). The whole dashboard follows. **✕ Show all years** goes back.
+  - **Click a strip's label** (e.g. *Bike trips*) to show only that strip at full height; the others collapse. Click it again, or **✕ Show all series**, to bring them back. The tooltip still lists all four.
   - A **vertical rule** follows a day hovered in any view.
+  - **Days selected in the scatterplot or calendar keep their colour in every strip; all other days turn grey** (the same grey as outside a marked period, and combined with it). Lone days are drawn at least 1.5 px wide so they stay visible on the full timeline; zoom in to see them properly.
   - The **"Selected days" rug** under the strips has one tick per day selected in the scatterplot or calendar.
 
 ### Scatterplot: rain vs. mobility (bottom left)
@@ -135,7 +141,7 @@ All colours, fonts and spacing are CSS variables in `:root` (`css/style.css`). `
 | **Correlation shown twice** | The dot pattern shows the correlation (a downward cloud = negative). The legend adds **Pearson r per colour group** plus r for all days. Rain vs bikes: r = −0.25 in summer, −0.22 in spring, −0.03 in winter. r is recomputed for the chosen period, e.g. a single year. |
 | **Avoid occlusion** | 524 days (32 %) are completely dry and would stack at x = 0. Dots are small (r = 3.5) and semi-transparent, and dry days are **jittered a few pixels sideways** (a stable offset per day, so they don't jump between redraws). The axis stays linear and the tooltip shows the exact value. |
 | **Daily points, not bins** | A hexbin or weekly mean would merge days, and we need single days for hover and for linking to the calendar. |
-| Season: blue winter, green spring, orange summer, brown autumn; weekday blue / weekend orange; temperature blue → orange; a blue ramp for the ordinal rain category, YlGnBu light → dark for the years | Colour-blind safe; ordered attributes get an ordered lightness ramp. |
+| Season: cyan winter, yellow spring, red summer, purple autumn; weekday violet / weekend yellow; a blue ramp for the ordinal rain category (same as the calendar), viridis for the years (yellow → green → teal → blue → purple: a separate hue per year, and light → dark keeps the order) | Colour-blind safe (validated); the season, day-type and year hues are not used by the trends chart or the calendar, so they can't be mistaken for "above/below average" or a calendar measure. Ordered attributes get an ordered lightness ramp. |
 | Missing values are hidden, with a note | 21 traffic days and 33 NO₂ days have no measurement. They are left out, never drawn as zero. |
 
 **Interactions:**
@@ -143,21 +149,21 @@ All colours, fonts and spacing are CSS variables in `:root` (`css/style.css`). `
 - **Hover** shows a day's values (details on demand).
 - **Click a point** to select that single day everywhere; click it again to clear.
 - **Brush** a rectangle to highlight those days in the other two views.
-- **Click a season in the legend** to filter to that season. Every category legend shows its **day count** and **correlation r** for the chosen period.
+- **Click a season in the legend** to filter to that season. The filter combines with a marked period or brushed days instead of replacing them. Every category legend shows its **day count** and **correlation r** for the chosen period.
 
 ### Calendar heatmap: individual days (bottom right)
 - **Encoding:** one square per day (weeks across, weekdays down), one block per year. This respects the data topology: the yearly cycle runs across the columns and the weekly cycle down the rows. Colour intensity is less precise than position, but the task is spotting patterns, not reading exact values.
 - **Colour toggle (reencoding):** **Bike trips** (Greens), **Temperature** (blue → orange), **Rain**, **Traffic** (Purples) or **Trip duration** (Oranges). Traffic shows its weekly rhythm next to the bikes' seasonal one (Task 4). Trip duration makes the weekend rows of every year darker: 11.9 vs 9.8 min (Task 6); its ramp ends at the 95th percentile, so a few 35-minute event days don't wash out the rest. Rain uses 4 ordinal steps (dry, light, moderate, heavy), and the **legend shows the number of days in each category** (Task 2). The counts follow the chosen period, e.g. 2023 alone has 41 heavy-rain days.
 - **Interactions:**
-  - **Days selected in other views are outlined**. They keep their colour, so you can see what the selected days look like.
+  - **Only days that pass every filter keep their colour** (marked period, selection and legend filter); all other days are greyed out.
   - **Click a day** to select it everywhere; **drag** across days to select a date range.
   - **Click a weekday letter** (e.g. S for Saturday) to select every such weekday.
   - **Click a year label** to show only that year (again to show all).
-  - **Click a legend category** (e.g. *Heavy*) to filter the other views to those days.
+  - **Click a legend category** (e.g. *Heavy*) to filter the other views to those days. It combines with a marked period or selection.
   - Days outside the period marked in the horizon chart **fade out**.
 
 ### Shared UI
-- **Reset** (in the header) clears all selections, filters and zooms. View settings such as the scatterplot axes and the calendar measure are kept.
+- **Reset** (in the header) clears all selections, filters and zooms, and shows all horizon strips again. View settings such as the scatterplot axes and the calendar measure are kept.
 - The header shows the active period and how many days are selected.
 - **Zoom and pan**: in every chart the same gestures apply:
 
@@ -176,7 +182,7 @@ Every task is answered by at least two idioms:
 
 | Task | Horizon | Scatterplot | Calendar |
 |---|---|---|---|
-| 1 Rain vs bikes, by season | – | ✓ dot pattern + r per season | ✓ select *Heavy* in rain mode, switch to Bikes: outlined days vs neighbours |
+| 1 Rain vs bikes, by season | – | ✓ dot pattern + r per season | ✓ select *Heavy* in rain mode, switch to Bikes: coloured heavy-rain days vs greyed neighbours |
 | 2 How common each rain category is | – | ✓ colour = rain category, day counts in legend | ✓ rain mode, day counts in legend |
 | 3 Bikes vs traffic, 2021–2025 | ✓ bike and traffic strips | ✓ X = traffic, Y = bikes, colour = year | ~ bikes mode, lighter every year |
 | 4 Bikes vs temperature cycle, and traffic | ✓ bike, temperature and traffic strips | ✓ X = temperature, Y = bikes | ✓ bikes / temperature / traffic modes |

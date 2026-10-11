@@ -18,11 +18,15 @@
   --color-accent: #0b5cad;    
   --color-dimmed: #c4c9cf;     
 
+  /* ---- Scatterplot colours: hues the trends chart and calendar don't use
+     (no orange, blue or green), so a season never looks like "above/below
+     average" or a calendar measure. ---- */
+
   /* ---- Categorical: season ---- */
-  --season-winter: #0072b2;
-  --season-spring: #009e73;
-  --season-summer: #e69f00;
-  --season-autumn: #8c510a;
+  --season-winter: #0fb5c9;
+  --season-spring: #ffbf00;
+  --season-summer: #d62728;
+  --season-autumn: #6a3d9a;
 
   /* ---- Ordinal: rain category  ---- */
   --rain-dry: #b9d3e8;
@@ -31,8 +35,8 @@
   --rain-heavy: #08407a;
 
   /* ---- Categorical: day type ---- */
-  --daytype-weekday: #0072b2;
-  --daytype-weekend: #e69f00;
+  --daytype-weekday: #8e44ad;
+  --daytype-weekend: #c8b400;
 
   /* ---- Diverging: temperature, cold blue → warm orange (no red) ---- */
   --temp-0: #2166ac;
@@ -48,12 +52,12 @@
   --bike-3: #31a354;
   --bike-4: #006d2c;
 
-  /* ---- Ordinal: year ---- */
-  --year-2021: #a1dab4;
-  --year-2022: #41b6c4;
-  --year-2023: #2c7fb8;
-  --year-2024: #253494;
-  --year-2025: #081d58;
+  /* ---- Ordinal: year (viridis: a different hue per year, light → dark keeps the order) ---- */
+  --year-2021: #fde725;
+  --year-2022: #5ec962;
+  --year-2023: #21918c;
+  --year-2024: #3b528b;
+  --year-2025: #440154;
 
   /* ---- Sequential: car traffic ---- */
   --traffic-0: #f2f0f7;
@@ -122,7 +126,7 @@ button, select { font: inherit; color: inherit; }
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-2) var(--space-3);
 }
 
 .app-header h1 {
@@ -161,8 +165,8 @@ button, select { font: inherit; color: inherit; }
   grid-template-areas:
     "horizon  horizon"
     "scatter  calendar";
-  gap: var(--space-5);
-  padding: 0 var(--space-5) var(--space-5);
+  gap: var(--space-3);
+  padding: 0 var(--space-3) var(--space-3);
   min-height: 760px;
 }
 
@@ -185,7 +189,7 @@ button, select { font: inherit; color: inherit; }
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  padding: var(--space-3) var(--space-4) var(--space-4);
+  padding: var(--space-2) var(--space-3) var(--space-2);
 }
 
 .panel--horizon  { grid-area: horizon; }
@@ -196,7 +200,7 @@ button, select { font: inherit; color: inherit; }
   display: flex;
   align-items: baseline;
   gap: var(--space-2);
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-1);
 }
 
 .panel__head h2 {
@@ -204,11 +208,6 @@ button, select { font: inherit; color: inherit; }
   font-size: var(--fs-panel-title);
   font-weight: 600;
   white-space: nowrap;
-}
-
-.panel__head .panel__sub {
-  font-size: var(--fs-small);
-  color: var(--color-ink-soft);
 }
 
 .panel__body {
@@ -271,7 +270,11 @@ button, select { font: inherit; color: inherit; }
 .hz-track { fill: var(--hz-track); }
 .hz-label { font-size: var(--fs-axis-label); fill: var(--color-ink); font-weight: 600; }
 .hz-sublabel { font-size: var(--fs-axis); fill: var(--color-ink-soft); }
+.hz-label-group { cursor: pointer; }
+.hz-label-hit { fill: transparent; }
+.hz-label-group:hover .hz-label, .hz-label-group.is-active .hz-label { fill: var(--color-accent); text-decoration: underline; }
 .hz-legend__label { font-size: var(--fs-axis); fill: var(--color-ink-soft); }
+.hz-legend__range { font-size: var(--fs-axis); fill: var(--color-ink); font-variant-numeric: tabular-nums; }
 .hz-rule {
   stroke: var(--color-ink);
   stroke-width: 1;
@@ -280,7 +283,6 @@ button, select { font: inherit; color: inherit; }
 }
 .hz-rule.is-visible { opacity: 0.8; }
 .hz-rug__tick { stroke: var(--color-accent); stroke-width: 1; }
-.hz-rug__tick.is-dimmed { stroke: var(--color-dimmed); }
 .hz-rug__label { font-size: var(--fs-axis); fill: var(--color-accent); font-weight: 600; opacity: 0; }
 .hz-rug__label.is-visible { opacity: 1; }
 
@@ -291,7 +293,6 @@ button, select { font: inherit; color: inherit; }
 .cal-cell { cursor: pointer; vector-effect: non-scaling-stroke; }
 .cal-cell.is-nodata { cursor: default; }
 .cal-cell.is-dimmed { fill: var(--color-dimmed); opacity: 0.45; }
-.cal-cell.is-selected { stroke: var(--color-ink); stroke-width: 1.3; }
 .cal-cell.is-hovered { stroke: var(--color-accent); stroke-width: 2.2; }
 .cal-year__label.is-link, .cal-weekday.is-link { cursor: pointer; }
 .cal-weekday__hit { fill: transparent; }
@@ -303,7 +304,7 @@ button, select { font: inherit; color: inherit; }
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-1);
 }
 
 .controls label {
@@ -329,6 +330,7 @@ button, select { font: inherit; color: inherit; }
   flex: 1;
   min-height: 0;
   position: relative;
+  overflow: hidden; /* a chart can never spill over its legend or controls */
 }
 
 .chart-area > svg {
@@ -371,8 +373,8 @@ button, select { font: inherit; color: inherit; }
   font-size: var(--fs-small);
   color: var(--color-ink-soft);
   text-align: right;
-  min-height: 1.2em;
 }
+.chart-note:empty { display: none; }
 
 /* ---------- Legend ---------- */
 .legend {
@@ -380,8 +382,8 @@ button, select { font: inherit; color: inherit; }
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: var(--space-1) var(--space-4);
-  padding-top: var(--space-2);
+  gap: var(--space-1) var(--space-3);
+  padding-top: var(--space-1);
   font-size: var(--fs-small);
 }
 
@@ -411,8 +413,19 @@ button, select { font: inherit; color: inherit; }
   background: var(--color-bg);
   border-radius: 999px;
   padding: 0 6px;
+  /* Fixed-width number slots, so the legend never shifts when the values change. */
+  display: inline-block;
+  min-width: 3.4em;
+  text-align: center;
 }
-.legend__extra { color: var(--color-ink-soft); font-variant-numeric: tabular-nums; }
+.legend__extra {
+  color: var(--color-ink-soft);
+  font-variant-numeric: tabular-nums;
+  display: inline-block;
+  min-width: 4.6em;
+  text-align: left;
+}
+.legend__num { display: inline-block; min-width: 2.6em; text-align: left; font-variant-numeric: tabular-nums; }
 .legend__item--static { cursor: default; }
 .legend__item--static:hover { border-color: transparent; }
 .legend__swatch--square { border-radius: 2px; }
@@ -432,17 +445,18 @@ button, select { font: inherit; color: inherit; }
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   box-shadow: 0 4px 14px rgba(31, 35, 40, 0.14);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-1) var(--space-2);
   font-size: var(--fs-small);
-  line-height: 1.5;
+  line-height: 1.3;
   min-width: 170px;
   opacity: 0;
   transition: opacity 120ms;
 }
 .tooltip.is-visible { opacity: 1; }
-.tooltip h3 { margin: 0 0 var(--space-1); font-size: var(--fs-body); }
+.tooltip h3 { margin: 0 0 2px; font-size: var(--fs-small); }
 .tooltip table { border-collapse: collapse; width: 100%; }
 .tooltip td { padding: 0; }
-.tooltip td + td { text-align: right; padding-left: var(--space-3); font-variant-numeric: tabular-nums; }
+.tooltip td + td { text-align: right; padding-left: var(--space-2); font-variant-numeric: tabular-nums; }
 .tooltip tr.is-encoded td { font-weight: 600; }
 .tooltip .muted { color: var(--color-ink-soft); }
+.tooltip__sub { margin-bottom: 2px; }

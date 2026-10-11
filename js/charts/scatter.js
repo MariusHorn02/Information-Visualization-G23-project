@@ -230,14 +230,14 @@ export function create(container, data, dispatcher) {
       counts: d3.rollup(inScope, (v) => v.length, (d) => d[ce.field]),
       showCounts: true,
       onSelect: (v) => legendSel.select(v, last),
-      extra: (v) => (rOf.get(v) != null ? `r = ${fmtR(rOf.get(v))}` : null),
+      // Always present (r = – when a group has too few days), so items keep their width.
+      extra: (v) => `r = ${rOf.get(v) != null ? fmtR(rOf.get(v)) : "–"}`,
     });
     const overall = r(inScope);
-    legend.append("span").attr("class", "legend__note")
-      .attr("title", "Pearson correlation between X and Y: −1 perfect negative, 0 none, +1 perfect positive")
-      .text(ce.type === "sequential"
-        ? `correlation r = ${overall == null ? "–" : fmtR(overall)}`
-        : `r = correlation of X and Y per group${overall == null ? "" : ` · all: ${fmtR(overall)}`}`);
+    const note = legend.append("span").attr("class", "legend__note")
+      .attr("title", "Pearson correlation between X and Y: −1 perfect negative, 0 none, +1 perfect positive");
+    note.append("span").text(ce.type === "sequential" ? "correlation r = " : "r = correlation of X and Y per group · all: ");
+    note.append("span").attr("class", "legend__num").text(overall == null ? "–" : fmtR(overall));
     markLegend(legend, legendSel.active(state));
   }
 

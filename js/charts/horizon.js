@@ -1,6 +1,7 @@
 import { formatValue, SMOOTH_WINDOW } from "../data.js";
 import { horizonColors, transitionMs } from "../theme.js";
 import * as tooltip from "../tooltip.js";
+import { isPicked, hasPick } from "../state.js";
 import { zoomFilter, brushFilter, zoomResetButton, isZoomed, centeredTransform } from "../zoom.js";
 
 const NAME = "horizon";
@@ -8,6 +9,7 @@ const MARGIN = { top: 4, right: 118, bottom: 22, left: 104 };
 const ROW_GAP = 6;
 const RUG_H = 8;
 const MIN_ZOOM_DAYS = 14;
+const MIN_RUN_PX = 1.5;  // narrowest coloured strip for a selected day
 const DAY = 864e5;
 
 const fmtDay = d3.utcFormat("%-d %b %Y");
@@ -16,6 +18,15 @@ const fmtShort = d3.utcFormat("%-d %b");
 const fmtDev = (s, v) => (!Number.isFinite(v) ? "–"
   : s.relative ? d3.format("+.0%")(v) : `${d3.format("+.1f")(v)} °C`);
 const fmtStep = (s) => (s.relative ? d3.format(".0%")(s.step) : `${s.step} °C`);
+
+// Short units for the labels under each strip name.
+const SHORT_UNIT = { bike_trips: "/day", traffic_count: "/day", no2_ug_m3: " µg/m³", temp_c: " °C" };
+const fmtNum = (v) => (Math.abs(v) >= 100 ? d3.format(",.0f")(v) : d3.format(".1~f")(v));
+/** One shade's size in the strip's own unit (a % strip's step times its average). */
+const shadeSize = (s) => (s.relative ? s.step * s.mean : s.step);
+const avgText = (s) => `avg ${fmtNum(s.mean)}${SHORT_UNIT[s.key] ?? ""}`;
+// Legend words, from the band nearest the average outwards.
+const SHADE_WORDS = ["slightly", "clearly", "far"];
 
 export function create(container, series, dispatcher) {
   const root = d3.select(container);
@@ -55,6 +66,11 @@ export function create(container, series, dispatcher) {
     .attr("class", "toggle toggle--action")
     .text("✕ Show all years")
     .on("click", () => zoomTo(null));
+  const showAllSeriesBtn = toolbar.append("button").attr("type", "button")
+    .attr("class", "toggle toggle--action")
+    .text("✕ Show all series")
+    .attr("hidden", true)
+    .on("click", () => focusSeries(null));
   const info = toolbar.append("span").attr("class", "toolbar-info");
 
   const area = root.append("div").attr("class", "chart-area");
@@ -63,8 +79,8 @@ export function create(container, series, dispatcher) {
   const g = svg.append("g").attr("transform", `translate(${MARGIN.left},${MARGIN.top})`);
   const defs = svg.append("defs");
   const clipId = "hz-focus-clip";
-  const focusRect = defs.append("clipPath").attr("id", clipId)
-    .append("rect").attr("y", -10);
+  // Coloured bands show through this clip; everything outside it stays grey.
+  const focusClip = defs.append("clipPath").attr("id", clipId);
   const plotClipId = "hz-plot-clip";
   const plotRect = defs.append("clipPath").attr("id", plotClipId)
     .append("rect").attr("y", -10);
@@ -81,6 +97,7 @@ export function create(container, series, dispatcher) {
   let width = 0;
   let rowsH = 0;
   let rowH = 0;
+  let focusKey = null;   // a series shown on its own, the others collapsed
   let x;
   let visible = [];      
   let drawnZoom = undefined;
@@ -109,6 +126,16 @@ export function create(container, series, dispatcher) {
     const k = Math.max(1, Math.min(zoom.scaleExtent()[1], width / (x1 - x0)));
     g.transition().duration(transitionMs()).ease(d3.easeCubicInOut)
       .call(zoom.transform, centeredTransform([(x0 + x1) / 2, rowsH / 2], k, [width, rowsH]));
+  }
+
+  /** Show only one series (click its label), or all again with null. */
+  function focusSeries(key) {
+    focusKey = key;
+    showAllSeriesBtn.attr("hidden", key ? null : true);
+    if (!last) return;
+    render(last);
+    applyState(last);
+    rowsG.style("opacity", 0.2).transition().duration(250).style("opacity", 1);
   }
 
   function resetView() {
@@ -144,7 +171,6 @@ export function create(container, series, dispatcher) {
     width = Math.max(10, box.width - MARGIN.left - MARGIN.right);
     const height = Math.max(40, box.height - MARGIN.top - MARGIN.bottom);
     rowsH = height - RUG_H - 2;
-    rowH = (rowsH - ROW_GAP * (series.length - 1)) / series.length;
     const extent = [[0, 0], [width, rowsH]];
     zoom.extent(extent).translateExtent(extent);
     plotRect.attr("width", width).attr("height", rowsH + 20);
@@ -164,15 +190,22 @@ export function create(container, series, dispatcher) {
     visible = slice(allDays, domain);
     drawnZoom = state.zoom;
 
+    const rows = focusKey ? series.filter((s) => s.key === focusKey) : series;
+    rowH = (rowsH - ROW_GAP * (rows.length - 1)) / rows.length;
+
     rowsG.selectAll("g.hz-row")
-      .data(series, (s) => s.key)
+      .data(rows, (s) => s.key)
       .join((enter) => {
         const row = enter.append("g").attr("class", "hz-row");
         row.append("rect").attr("class", "hz-track");
         row.append("g").attr("class", "hz-bands hz-bands--dimmed").attr("clip-path", `url(#${plotClipId})`);
         row.append("g").attr("class", "hz-bands hz-bands--focus").attr("clip-path", `url(#${clipId})`);
-        row.append("text").attr("class", "hz-label").attr("text-anchor", "end");
-        row.append("text").attr("class", "hz-sublabel").attr("text-anchor", "end");
+        const label = row.append("g").attr("class", "hz-label-group is-link").attr("role", "button")
+          .on("click", (event, s) => focusSeries(focusKey === s.key ? null : s.key));
+        label.append("rect").attr("class", "hz-label-hit");
+        label.append("text").attr("class", "hz-label").attr("text-anchor", "end");
+        label.append("text").attr("class", "hz-sublabel").attr("text-anchor", "end");
+        label.append("title");
         return row;
       })
       .attr("transform", (s, i) => `translate(0,${i * (rowH + ROW_GAP)})`)
@@ -181,8 +214,12 @@ export function create(container, series, dispatcher) {
         const row = d3.select(this);
         row.select(".hz-track").attr("width", width).attr("height", rowH);
         row.select(".hz-label").attr("x", -12).attr("y", rowH / 2 - 2).text(s.label);
-        row.select(".hz-sublabel").attr("x", -12).attr("y", rowH / 2 + 12)
-          .text(`band = ${fmtStep(s)}`);
+        row.select(".hz-sublabel").attr("x", -12).attr("y", rowH / 2 + 12).text(avgText(s));
+        row.select(".hz-label-hit").attr("x", -MARGIN.left).attr("width", MARGIN.left - 4).attr("height", rowH);
+        row.select(".hz-label-group").classed("is-active", focusKey === s.key);
+        row.select("title").text(`${s.label}: 2021–25 average ${formatValue(s.key, s.mean)}. `
+          + `One shade = ${s.relative ? `${fmtStep(s)} of the average ≈ ` : ""}${formatValue(s.key, shadeSize(s))}. `
+          + (focusKey === s.key ? "Click to show all strips." : `Click to show only ${s.label}.`));
 
         const y = d3.scaleLinear().domain([0, step]).range([rowH, 0]);
         const layers = [];
@@ -239,20 +276,28 @@ export function create(container, series, dispatcher) {
       .data(zoomed ? [] : [0]).join("title").text("Show only this year");
   }
 
+  /** Legend in words: slightly / clearly / far above or below average. Each
+   *  strip's average is under its name; hover the name for one shade's size. */
   function renderLegend(colors) {
-    const swatches = [...colors.above.slice().reverse(), ...colors.below];
+    const word = (sign, i) => `${SHADE_WORDS[i]} ${sign > 0 ? "above" : "below"}`;
+    const items = [
+      ...colors.above.map((color, i) => ({ color, label: word(1, i) })).reverse(),
+      ...colors.below.map((color, i) => ({ color, label: word(-1, i) })),
+    ];
     const sw = 12;
     const gap = 3;
-    const total = swatches.length * (sw + gap) + 28;
+    const total = items.length * (sw + gap);
     const top = Math.max(0, (rowsH - total) / 2);
-    legendG.attr("transform", `translate(${width + 22},${top})`);
+    legendG.attr("transform", `translate(${width + 16},${top})`);
     legendG.selectAll("*").remove();
-    legendG.append("text").attr("class", "hz-legend__label").attr("y", 9).text("Above avg.");
-    legendG.selectAll("rect").data(swatches).join("rect")
-      .attr("y", (c, i) => 16 + i * (sw + gap)).attr("width", 26).attr("height", sw).attr("rx", 2)
-      .attr("fill", (c) => c);
-    legendG.append("text").attr("class", "hz-legend__label")
-      .attr("y", 16 + swatches.length * (sw + gap) + 9).text("Below avg.");
+    const item = legendG.selectAll("g.hz-legend__item").data(items).join("g")
+      .attr("class", "hz-legend__item")
+      .attr("transform", (d, i) => `translate(0,${i * (sw + gap)})`);
+    item.append("rect").attr("width", 18).attr("height", sw).attr("rx", 2).attr("fill", (d) => d.color);
+    item.append("text").attr("class", "hz-legend__range").attr("x", 23).attr("y", sw / 2).attr("dy", "0.35em")
+      .text((d) => d.label);
+    legendG.append("title").text("Darker = further from the 2021–2025 average. Each shade is one fixed step; "
+      + "hover a strip's name for its step size, or the chart for exact values.");
   }
 
   function renderToolbar(state) {
@@ -272,10 +317,35 @@ export function create(container, series, dispatcher) {
     resetZoomBtn.attr("hidden", isZoomed(view) ? null : true);
   }
 
+  /** Pixel runs of consecutive days that stay coloured: inside the marked
+   *  period, and among the selected / legend-filtered days if there are any. */
+  function focusRuns(state) {
+    if (!state.timeRange && !hasPick(state)) return [{ x0: -1, x1: width + 1 }];
+    const runs = [];
+    let run = null;
+    for (const d of visible) {
+      const on = inPeriod(state, d.date) && isPicked(state, d.id);
+      if (!on) { run = null; continue; }
+      const x0 = Math.max(-1, x(d.date));
+      const x1 = Math.min(width + 1, x(d3.utcDay.offset(d.date, 1)));
+      if (run) run.x1 = x1;
+      else runs.push(run = { x0, x1 });
+    }
+    // On the full timeline one day is under 1 px; keep lone days visible.
+    for (const r of runs) {
+      if (r.x1 - r.x0 < MIN_RUN_PX) {
+        const c = (r.x0 + r.x1) / 2;
+        r.x0 = c - MIN_RUN_PX / 2;
+        r.x1 = c + MIN_RUN_PX / 2;
+      }
+    }
+    return runs;
+  }
+
   function applyState(state) {
-    const [a, b] = x.domain();
-    const ids = state.selectedIds
-      ? [...state.selectedIds].filter((id) => { const d = dateById.get(id); return d >= a && d <= b; })
+    // Rug: one tick per day that passes every filter, inside the visible range.
+    const ids = hasPick(state)
+      ? visible.filter((d) => inPeriod(state, d.date) && isPicked(state, d.id)).map((d) => d.id)
       : [];
     rugG.attr("transform", `translate(0,${rowsH + 1})`)
       .selectAll("line")
@@ -283,18 +353,19 @@ export function create(container, series, dispatcher) {
       .join("line")
       .attr("class", "hz-rug__tick")
       .attr("x1", (id) => x(dateById.get(id))).attr("x2", (id) => x(dateById.get(id)))
-      .attr("y1", 0).attr("y2", RUG_H)
-      .classed("is-dimmed", (id) => !inPeriod(state, dateById.get(id)));
+      .attr("y1", 0).attr("y2", RUG_H);
     rugLabel
       .attr("y", rowsH + 1 + RUG_H / 2)
-      .classed("is-visible", Boolean(state.selectedIds))
+      .classed("is-visible", hasPick(state))
       .text("Selected days")
-      .append("title").text(`${ids.length} days selected in the scatterplot or calendar, shown on the timeline`);
+      .append("title").text(`${ids.length} days selected or filtered in the scatterplot or calendar, shown on the timeline`);
 
-    const [f0, f1] = state.timeRange
-      ? [x(state.timeRange[0]), x(d3.utcDay.offset(state.timeRange[1], 1))]
-      : [-1, width + 1];
-    focusRect.attr("x", Math.max(-1, f0)).attr("width", Math.max(0, Math.min(width + 1, f1) - Math.max(-1, f0)))
+    focusClip.selectAll("rect")
+      .data(focusRuns(state))
+      .join("rect")
+      .attr("x", (r) => r.x0)
+      .attr("width", (r) => r.x1 - r.x0)
+      .attr("y", -10)
       .attr("height", rowsH + 20);
 
     const current = d3.brushSelection(brushG.node());
@@ -326,7 +397,6 @@ export function create(container, series, dispatcher) {
         <td class="muted">${fmtDev(s, v.dev)}</td></tr>`;
     });
     return `<h3>${fmtShort(day.from)} – ${fmtDay(day.to)}</h3>
-      <div class="muted">${SMOOTH_WINDOW}-day mean around ${tooltip.fmtDate(day.date)} · vs. 2021–25 average</div>
       <table>${rows.join("")}</table>`;
   }
 
@@ -348,13 +418,15 @@ export function create(container, series, dispatcher) {
       last = state;
       if (reason === "init") { measure(); render(state); }
       if (reason === "hover") return applyHover(state);
-      if (state.zoom !== drawnZoom) {
+      const resetting = reason === "reset" && (isZoomed(view) || focusKey);
+      if (state.zoom !== drawnZoom || resetting) {
+        if (reason === "reset") {
+          focusKey = null;
+          showAllSeriesBtn.attr("hidden", true);
+        }
         resetView();
         render(state);
         rowsG.style("opacity", 0.2).transition().duration(250).style("opacity", 1);
-      } else if (reason === "reset" && isZoomed(view)) {
-        resetView();
-        render(state);
       }
       applyState(state);
     },

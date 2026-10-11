@@ -32,9 +32,10 @@ function observeSize(container, chart) {
   const targets = [container, ...container.querySelectorAll(".chart-area")];
   const sizeKey = () => targets.map((el) => `${el.clientWidth}x${el.clientHeight}`).join(",");
   let frame = null;
-  // Start from the size the chart was just drawn at, so the observer's
-  // initial callback doesn't trigger a redundant redraw.
-  let lastSize = sizeKey();
+  // Start empty: a chart measures itself before its legend and notes exist, so
+  // the size it was drawn at may already be stale. The observer's first
+  // callback then redraws it once at the settled size.
+  let lastSize = "";
   const observer = new ResizeObserver(() => {
     const size = sizeKey();
     if (size === lastSize) return;

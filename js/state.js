@@ -3,6 +3,10 @@ export const state = {
   timeRange: null,    
   selectedIds: null,    
   selectionSource: null, 
+  // A legend category (e.g. Winter). Kept apart from the selection so the two
+  // combine: a marked period or brushed days AND the category.
+  filterIds: null,
+  filterSource: null,
   hoveredId: null,       
   encodings: {         
     scatter: { x: "rain_mm", y: "bike_trips", color: "season" },
@@ -10,7 +14,7 @@ export const state = {
   },
 };
 
-export const dispatcher = d3.dispatch("zoomTime", "brushTime", "brushPoints", "hover", "encode", "reset", "change");
+export const dispatcher = d3.dispatch("zoomTime", "brushTime", "brushPoints", "filter", "hover", "encode", "reset", "change");
 
 const notify = (reason) => dispatcher.call("change", null, state, reason);
 
@@ -43,11 +47,19 @@ dispatcher.on("encode.state", ({ chart, ...encoding }) => {
   notify("encode");
 });
 
+dispatcher.on("filter.state", ({ ids, source }) => {
+  state.filterIds = ids ? new Set(ids) : null;
+  state.filterSource = state.filterIds ? source : null;
+  notify("filter");
+});
+
 dispatcher.on("reset.state", () => {
   state.zoom = null;
   state.timeRange = null;
   state.selectedIds = null;
   state.selectionSource = null;
+  state.filterIds = null;
+  state.filterSource = null;
   state.hoveredId = null;
   notify("reset");
 });
@@ -60,10 +72,12 @@ const inRange = (range, date) => !range || (date >= range[0] && date <= range[1]
 
 export const inPeriod = (s, d) => inRange(s.zoom, d.date) && inRange(s.timeRange, d.date);
 
-export function isActive(s, d) {
-  if (!inPeriod(s, d)) return false;
-  if (s.selectedIds && !s.selectedIds.has(d.id)) return false;
-  return true;
-}
+/** Passes the day selection and the legend filter (ignores the period). */
+export const isPicked = (s, id) =>
+  (!s.selectedIds || s.selectedIds.has(id)) && (!s.filterIds || s.filterIds.has(id));
 
-export const hasFilter = (s) => Boolean(s.zoom || s.timeRange || s.selectedIds);
+export const hasPick = (s) => Boolean(s.selectedIds || s.filterIds);
+
+export const isActive = (s, d) => inPeriod(s, d) && isPicked(s, d.id);
+
+export const hasFilter = (s) => Boolean(s.zoom || s.timeRange || hasPick(s));

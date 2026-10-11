@@ -23,13 +23,15 @@ export function renderLegend(legend, key, scale, { counts, showCounts = false, e
     .join("button")
     .attr("type", "button")
     .attr("class", "legend__item")
-    .attr("title", (v) => (counts ? `Select all ${n(v)} ${v} days` : `Select ${v} days`))
+    .attr("title", (v) => {
+      const range = ce.ranges?.[v] ? ` (${ce.ranges[v]})` : "";
+      return counts ? `Select all ${n(v)} ${v}${range} days` : `Select ${v}${range} days`;
+    })
     .on("click", (event, v) => onSelect?.(v));
   items.append("span").attr("class", "legend__swatch").style("background", (v) => scale(v));
   items.append("span").text((v) => v);
   if (showCounts) items.append("span").attr("class", "legend__count").text((v) => d3.format(",")(n(v)));
   if (extra) items.filter((v) => extra(v) != null).append("span").attr("class", "legend__extra").text(extra);
-  if (ce.note) legend.append("span").attr("class", "legend__note").text(ce.note);
 }
 
 export function markLegend(legend, value) {
@@ -40,14 +42,14 @@ export function legendSelector(dispatcher, source, getRows, getField) {
   let value = null;
   return {
     select(v, state) {
-      const same = value === v && state?.selectionSource === source;
+      const same = value === v && state?.filterSource === source;
       value = same ? null : v;
       const field = getField();
       const ids = same ? null : getRows().filter((d) => d[field] === v).map((d) => d.id);
-      dispatcher.call("brushPoints", null, { ids, source });
+      dispatcher.call("filter", null, { ids, source });
     },
     active(state) {
-      return state?.selectionSource === source ? value : null;
+      return state?.filterSource === source ? value : null;
     },
   };
 }
