@@ -76,8 +76,7 @@ The whole dashboard shares one state object:
 | `timeRange` | `[start, end]` period brushed in the horizon chart (inside the zoom) |
 | `selectedIds` | set of selected day ids, from any chart |
 | `selectionSource` | which chart made the selection |
-| `filterIds` | set of day ids of a legend category (e.g. Winter); kept separate so it combines with the selection |
-| `filterSource` | which legend set the filter |
+| `filters` | one set of day ids per legend (`{ "scatter:legend": …, "calendar:legend": … }`), e.g. Winter + Spring in the scatterplot and Heavy in the calendar; kept separate so they all combine with each other and with the selection |
 | `hoveredId` | day under the pointer in any view |
 | `encodings` | view settings: `scatter {x, y, color}`, `calendar {measure}` |
 
@@ -87,7 +86,7 @@ Data flows in one direction only:
 2. `state.js` updates the state and fires **`change`**.
 3. Every registered chart receives `update(state, reason)` and redraws itself.
 
-Charts never reference each other. Every idiom shows days, so the day `id` is the shared key that links them. A selection made in any view is a set of ids, and every other view can resolve those ids in its own data. `isActive(state, day)` combines the zoom, the brushed period, the day selection and the legend filter (all must pass), so every chart applies the same rule. Filters never cancel each other: mark a period, then click *Winter*, and only the winter days inside that period stay active.
+Charts never reference each other. Every idiom shows days, so the day `id` is the shared key that links them. A selection made in any view is a set of ids, and every other view can resolve those ids in its own data. `isActive(state, day)` combines the zoom, the brushed period, the day selection and every legend filter (all must pass), so every chart applies the same rule. Filters never cancel each other: mark a period, click *Heavy* in the calendar legend and *Winter* in the scatterplot legend, and only the heavy-rain winter days inside that period stay active.
 
 ### 3. Chart modules: `js/charts/*.js`
 Every chart exports the same interface:

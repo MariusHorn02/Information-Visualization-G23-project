@@ -3,10 +3,10 @@ export const state = {
   timeRange: null,    
   selectedIds: null,    
   selectionSource: null, 
-  // A legend category (e.g. Winter). Kept apart from the selection so the two
-  // combine: a marked period or brushed days AND the category.
-  filterIds: null,
-  filterSource: null,
+  // Legend filters, one per legend: { source: Set of day ids }. Kept apart from
+  // the selection and from each other so they all combine, e.g. Heavy rain in
+  // the calendar AND Winter in the scatterplot AND a marked period.
+  filters: {},
   hoveredId: null,       
   encodings: {         
     scatter: { x: "rain_mm", y: "bike_trips", color: "season" },
@@ -48,8 +48,8 @@ dispatcher.on("encode.state", ({ chart, ...encoding }) => {
 });
 
 dispatcher.on("filter.state", ({ ids, source }) => {
-  state.filterIds = ids ? new Set(ids) : null;
-  state.filterSource = state.filterIds ? source : null;
+  if (ids) state.filters[source] = new Set(ids);
+  else delete state.filters[source];
   notify("filter");
 });
 
@@ -58,8 +58,7 @@ dispatcher.on("reset.state", () => {
   state.timeRange = null;
   state.selectedIds = null;
   state.selectionSource = null;
-  state.filterIds = null;
-  state.filterSource = null;
+  state.filters = {};
   state.hoveredId = null;
   notify("reset");
 });
@@ -72,11 +71,11 @@ const inRange = (range, date) => !range || (date >= range[0] && date <= range[1]
 
 export const inPeriod = (s, d) => inRange(s.zoom, d.date) && inRange(s.timeRange, d.date);
 
-/** Passes the day selection and the legend filter (ignores the period). */
+/** Passes the day selection and every legend filter (ignores the period). */
 export const isPicked = (s, id) =>
-  (!s.selectedIds || s.selectedIds.has(id)) && (!s.filterIds || s.filterIds.has(id));
+  (!s.selectedIds || s.selectedIds.has(id)) && Object.values(s.filters).every((ids) => ids.has(id));
 
-export const hasPick = (s) => Boolean(s.selectedIds || s.filterIds);
+export const hasPick = (s) => Boolean(s.selectedIds || Object.keys(s.filters).length);
 
 export const isActive = (s, d) => inPeriod(s, d) && isPicked(s, d.id);
 

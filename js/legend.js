@@ -48,8 +48,8 @@ export function legendSelector(dispatcher, source, getRows, getField) {
   return {
     select(v, state) {
       const field = getField();
-      // Start over if another view set the filter or the legend switched attribute.
-      if (state?.filterSource !== source || valuesField !== field) values = new Set();
+      // Start over if this filter was cleared (Reset) or the legend switched attribute.
+      if (!state?.filters[source] || valuesField !== field) values = new Set();
       valuesField = field;
       if (values.has(v)) values.delete(v);
       else values.add(v);
@@ -57,7 +57,7 @@ export function legendSelector(dispatcher, source, getRows, getField) {
       dispatcher.call("filter", null, { ids, source });
     },
     active(state) {
-      return state?.filterSource === source && valuesField === getField() ? values : null;
+      return state?.filters[source] && valuesField === getField() ? values : null;
     },
   };
 }
