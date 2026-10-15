@@ -5,7 +5,7 @@ import { isPicked, hasPick } from "../state.js";
 import { zoomFilter, brushFilter, zoomResetButton, isZoomed, centeredTransform } from "../zoom.js";
 
 const NAME = "horizon";
-const MARGIN = { top: 4, right: 118, bottom: 22, left: 104 };
+const MARGIN = { top: 4, right: 16, bottom: 22, left: 104 };
 const ROW_GAP = 6;
 const RUG_H = 8;
 const MIN_ZOOM_DAYS = 14;
@@ -25,8 +25,6 @@ const fmtNum = (v) => (Math.abs(v) >= 100 ? d3.format(",.0f")(v) : d3.format(".1
 /** One shade's size in the strip's own unit (a % strip's step times its average). */
 const shadeSize = (s) => (s.relative ? s.step * s.mean : s.step);
 const avgText = (s) => `avg ${fmtNum(s.mean)}${SHORT_UNIT[s.key] ?? ""}`;
-// Legend words, from the band nearest the average outwards.
-const SHADE_WORDS = ["slightly", "clearly", "far"];
 
 export function create(container, series, dispatcher) {
   const root = d3.select(container);
@@ -71,6 +69,7 @@ export function create(container, series, dispatcher) {
     .text("✕ Show all series")
     .attr("hidden", true)
     .on("click", () => focusSeries(null));
+  const legend = toolbar.append("div").attr("class", "hz-legend");
   const info = toolbar.append("span").attr("class", "toolbar-info");
 
   const area = root.append("div").attr("class", "chart-area");
@@ -89,7 +88,6 @@ export function create(container, series, dispatcher) {
   const rugLabel = g.append("text").attr("class", "hz-rug__label").attr("text-anchor", "end")
     .attr("x", -12).attr("dy", "0.35em");
   const axisG = g.append("g").attr("class", "axis axis--x");
-  const legendG = g.append("g").attr("class", "hz-legend");
   const rule = g.append("line").attr("class", "hz-rule").attr("y1", 0);
   const brushG = g.append("g").attr("class", "brush");
   const resetZoomBtn = zoomResetButton(area, () => g.call(zoom.transform, d3.zoomIdentity));
@@ -276,47 +274,22 @@ export function create(container, series, dispatcher) {
       .data(zoomed ? [] : [0]).join("title").text("Show only this year");
   }
 
-  /** Legend for the deviation from the 2021–25 average. With all strips shown the
-   *  shades are named in words (slightly / clearly / far), because each strip
-   *  has its own step size; with one strip shown they are labelled with that
-   *  strip's real ranges (% of its average, or °C for temperature). */
+  /** Legend for the deviation from the 2021–25 average: one ramp from far below
+   *  (dark blue) to far above (dark orange). With one strip shown, the tooltip
+   *  gives that strip's step size. */
   function renderLegend(colors, rows) {
     const only = rows.length === 1 ? rows[0] : null;
-    const label = (sign, i) => {
-      if (!only) return `${SHADE_WORDS[i]} ${sign > 0 ? "above" : "below"}`;
-      const pm = sign > 0 ? "+" : "−";
-      const fmt = only.relative ? (v) => d3.format(".0f")(v * 100) : d3.format(".0f");
-      const unit = only.relative ? " %" : " °C";
-      return `${pm}${fmt(i * only.step)}–${fmt((i + 1) * only.step)}${unit}`;
-    };
-    const items = [
-      ...colors.above.map((color, i) => ({ color, label: label(1, i) })).reverse(),
-      ...colors.below.map((color, i) => ({ color, label: label(-1, i) })),
-    ];
-    const sw = 12;
-    const gap = 3;
-    // All strips: "Above avg." on top and "Below avg." underneath; one strip:
-    // just its real ranges, no headings.
-    const head = only ? 0 : 16;
-    const foot = only ? 0 : 14;
-    const total = head + items.length * (sw + gap) + foot;
-    const top = Math.max(0, (rowsH - total) / 2);
-    legendG.attr("transform", `translate(${width + 16},${top})`);
-    legendG.selectAll("*").remove();
-    if (!only) legendG.append("text").attr("class", "hz-legend__label").attr("y", 9).text("Above avg.");
-    const item = legendG.selectAll("g.hz-legend__item").data(items).join("g")
-      .attr("class", "hz-legend__item")
-      .attr("transform", (d, i) => `translate(0,${head + i * (sw + gap)})`);
-    item.append("rect").attr("width", 18).attr("height", sw).attr("rx", 2).attr("fill", (d) => d.color);
-    item.append("text").attr("class", "hz-legend__range").attr("x", 23).attr("y", sw / 2).attr("dy", "0.35em")
-      .text((d) => d.label);
-    if (!only) {
-      legendG.append("text").attr("class", "hz-legend__label")
-        .attr("y", head + items.length * (sw + gap) + 9).text("Below avg.");
-    }
-    legendG.append("title").text(only
+    legend.selectAll("*").remove();
+    legend.attr("title", only
       ? `${only.label}: each shade = ${fmtStep(only)} from the 2021–2025 average.`
-      : "Darker = further from the 2021–2025 average. Click a strip's name to see its ranges in % (or °C).");
+      : "Darker = further from the 2021–2025 average. Click a strip's name to see its step size.");
+    legend.append("span").attr("class", "hz-legend__label").text("Below avg.");
+    legend.append("span").attr("class", "hz-legend__ramp")
+      .selectAll("span")
+      .data([...colors.below.slice().reverse(), ...colors.above])
+      .join("span")
+      .style("background", (c) => c);
+    legend.append("span").attr("class", "hz-legend__label").text("Above avg.");
   }
 
   function renderToolbar(state) {

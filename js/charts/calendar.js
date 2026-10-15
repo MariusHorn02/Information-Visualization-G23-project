@@ -11,7 +11,7 @@ const MEASURES = [
   { key: "temp_c", label: "Temperature" },
   { key: "rain_category", label: "Rain" },
   { key: "traffic_count", label: "Traffic" },
-  { key: "bike_avg_duration_min", label: "Trip duration" },
+  { key: "bike_avg_duration_min", label: "Bike trip duration" },
 ];
 const WEEKS = 54;            
 const YEAR_GAP = 1.4;       

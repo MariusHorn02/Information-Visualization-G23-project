@@ -273,8 +273,23 @@ button, select { font: inherit; color: inherit; }
 .hz-label-group { cursor: pointer; }
 .hz-label-hit { fill: transparent; }
 .hz-label-group:hover .hz-label, .hz-label-group.is-active .hz-label { fill: var(--color-accent); text-decoration: underline; }
-.hz-legend__label { font-size: var(--fs-axis); fill: var(--color-ink-soft); }
-.hz-legend__range { font-size: var(--fs-axis); fill: var(--color-ink); font-variant-numeric: tabular-nums; }
+.hz-toolbar { position: relative; }
+.hz-legend {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-small);
+  color: var(--color-ink-soft);
+}
+.hz-legend__ramp { display: inline-flex; border-radius: 2px; overflow: hidden; }
+.hz-legend__ramp span { width: 18px; height: 12px; }
+@media (max-width: 900px) {
+  .hz-legend { position: static; transform: none; }
+}
 .hz-rule {
   stroke: var(--color-ink);
   stroke-width: 1;
