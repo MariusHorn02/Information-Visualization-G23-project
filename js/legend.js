@@ -25,7 +25,8 @@ export function renderLegend(legend, key, scale, { counts, showCounts = false, e
     .attr("class", "legend__item")
     .attr("title", (v) => {
       const range = ce.ranges?.[v] ? ` (${ce.ranges[v]})` : "";
-      return counts ? `Select all ${n(v)} ${v}${range} days` : `Select ${v}${range} days`;
+      const what = counts ? `all ${n(v)} ${v}${range} days` : `${v}${range} days`;
+      return `Click to add or remove ${what}. Click more categories to combine them.`;
     })
     .on("click", (event, v) => onSelect?.(v));
   items.append("span").attr("class", "legend__swatch").style("background", (v) => scale(v));
@@ -34,22 +35,29 @@ export function renderLegend(legend, key, scale, { counts, showCounts = false, e
   if (extra) items.filter((v) => extra(v) != null).append("span").attr("class", "legend__extra").text(extra);
 }
 
-export function markLegend(legend, value) {
-  legend.selectAll(".legend__item").classed("is-active", (v) => v === value);
+export function markLegend(legend, values) {
+  legend.selectAll(".legend__item").classed("is-active", (v) => Boolean(values?.has(v)));
 }
 
+/** Legend filter with multi-select: every click adds a category (e.g. Spring,
+ *  then Winter), clicking a selected one again removes it, and removing the
+ *  last one clears the filter. */
 export function legendSelector(dispatcher, source, getRows, getField) {
-  let value = null;
+  let values = new Set();
+  let valuesField = null;
   return {
     select(v, state) {
-      const same = value === v && state?.filterSource === source;
-      value = same ? null : v;
       const field = getField();
-      const ids = same ? null : getRows().filter((d) => d[field] === v).map((d) => d.id);
+      // Start over if another view set the filter or the legend switched attribute.
+      if (state?.filterSource !== source || valuesField !== field) values = new Set();
+      valuesField = field;
+      if (values.has(v)) values.delete(v);
+      else values.add(v);
+      const ids = values.size ? getRows().filter((d) => values.has(d[field])).map((d) => d.id) : null;
       dispatcher.call("filter", null, { ids, source });
     },
     active(state) {
-      return state?.filterSource === source ? value : null;
+      return state?.filterSource === source && valuesField === getField() ? values : null;
     },
   };
 }

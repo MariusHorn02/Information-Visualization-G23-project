@@ -1,6 +1,6 @@
 # Rain & Mobility in Bergen
 
-Information Visualization, Group 23, Checkpoint III: first prototype.
+Information Visualization, Group 23, final project.
 
 This dashboard asks how daily rainfall in Bergen relates to city-bike use, car traffic and air quality (NO₂), for 2021–2025. It has three linked views: a horizon chart, a scatterplot and a calendar heatmap. All three use the real dataset.
 
@@ -120,7 +120,7 @@ All colours, fonts and spacing are CSS variables in `:root` (`css/style.css`). `
 
 ### Horizon chart: long-term trends (top)
 - **Four strips**: bike trips, temperature, car traffic and NO₂. Temperature sits directly under bike trips, so Task 4 (does cycling follow the temperature cycle?) can be compared by eye.
-- **Encoding:** time is on x. Each strip shows its 7-day mean as the deviation from its own 2021–2025 average, folded into 3 bands. **Hue shows the sign** (orange = above average, blue = below). Orange vs blue stays readable with red–green colour blindness. **Colour intensity and height show the size**, with darker bands for bigger deviations. The legend names the shades in words (*slightly / clearly / far* above or below, between the headings *Above avg.* and *Below avg.*) while all strips are shown, because one legend serves four strips with different scales. When one strip is shown on its own, the legend switches to that strip's real ranges, e.g. *+0–60 %, +60–120 %* for bike trips or *+0–5 °C* for temperature. Each strip's average is under its name in real units (e.g. *avg 1,351/day*, *avg 9.2 °C*). Hovering the name gives the size of one shade ("One shade = 60% of the average ≈ 811 trips/day"), and hovering the chart gives exact values.
+- **Encoding:** time is on x. Each strip shows its 7-day mean as the deviation from its own 2021–2025 average, folded into 3 bands. **Hue shows the sign** (orange = above average, blue = below). Orange vs blue stays readable with red–green colour blindness. **Colour intensity and height show the size**, with darker bands for bigger deviations. The legend sits above the strips, in the middle, so the strips use the full width: one compact ramp from dark blue (*Below avg.*) to dark orange (*Above avg.*). It names no ranges because one legend serves four strips with different scales; hovering it gives the size of one shade (for a single strip, in that strip's unit). Each strip's average is under its name in real units (e.g. *avg 1,351/day*, *avg 9.2 °C*). Hovering the name gives the size of one shade ("One shade = 60% of the average ≈ 811 trips/day"), and hovering the chart gives exact values.
 - **Why per-series deviation ("Don't distort the truth"):** bike trips average about 1,350/day and car traffic about 40,500/day. On a shared axis bikes would be a flat line; with a dual axis any "divergence" would depend on how the two axes are scaled. The trade-off is that magnitudes are not comparable across strips, so hover gives the exact values.
 - **Missing days** (traffic and NO₂ gaps) stay blank, never interpolated.
 - **Interactions:**
@@ -149,7 +149,7 @@ All colours, fonts and spacing are CSS variables in `:root` (`css/style.css`). `
 - **Hover** shows a day's values (details on demand).
 - **Click a point** to select that single day everywhere; click it again to clear.
 - **Brush** a rectangle to highlight those days in the other two views.
-- **Click a season in the legend** to filter to that season. The filter combines with a marked period or brushed days instead of replacing them. Every category legend shows its **day count** and **correlation r** for the chosen period.
+- **Click seasons in the legend** to filter to them. Every click adds a season (e.g. *Spring + Winter*), and clicking a selected one again removes it. The filter combines with a marked period or brushed days instead of replacing them. Every category legend shows its **day count** and **correlation r** for the chosen period.
 
 ### Calendar heatmap: individual days (bottom right)
 - **Encoding:** one square per day (weeks across, weekdays down), one block per year. This respects the data topology: the yearly cycle runs across the columns and the weekly cycle down the rows. Colour intensity is less precise than position, but the task is spotting patterns, not reading exact values.
@@ -162,7 +162,7 @@ All colours, fonts and spacing are CSS variables in `:root` (`css/style.css`). `
     - **Click weekday letters**, e.g. **S + S** = all weekends.
     - **Click year labels** to add whole years.
   - The selection combines with the scatterplot's colour category and the legend filters, e.g. *summer months AND weekends*.
-  - **Click a legend category** (e.g. *Heavy*) to filter the other views to those days. It combines with a marked period or selection.
+  - **Click legend categories** (e.g. *Moderate + Heavy*) to filter the other views to those days; click one again to remove it. It combines with a marked period or selection.
   - Days outside the period marked in the horizon chart **fade out**.
 
 ### Shared UI
